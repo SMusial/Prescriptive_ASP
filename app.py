@@ -1007,14 +1007,19 @@ def _tab_rebalancing(settings):
             for asp in all_asps:
                 if asp in alloc_m and asp in monthly_scores[m_idx]:
                     sr = monthly_scores[m_idx][asp] / max(base_scores.get(asp, 50), 1)
-                    sr_clamped = max(0.5, min(1.5, sr))  # prevent extreme ratios
-                    cost_val = max(40, int(base_cost_map.get(asp, 130) * (2 - sr_clamped) + rng.normal(0, 3)))
-                    sla_val = int(max(60, min(100, base_sla_map.get(asp, 85) * sr_clamped + rng.normal(0, 1))))
-                    # NPS: bigger swings, some negative, positive trend over time
+                    sr_clamped = max(0.6, min(1.4, sr))
+                    # Cost: more variance
+                    cost_val = max(50, int(base_cost_map.get(asp, 130) * (1.8 - sr_clamped * 0.8) + rng.normal(0, 5)))
+                    # SLA: cap at 98%, more variation
+                    sla_base = min(92, base_sla_map.get(asp, 85))
+                    sla_val = int(max(60, min(98, sla_base * sr_clamped + rng.normal(0, 2))))
+                    # NPS: bigger swings, negative in early months, positive trend
                     nps_base = base_nps_map.get(asp, 0)
-                    nps_trend = (m_idx - 18) * 0.4  # positive trend from mid-period
-                    nps_val = int(max(-40, min(35, nps_base * sr_clamped + nps_trend + rng.normal(0, 6))))
-                    repeat_val = int(max(1, min(25, base_repeat_map.get(asp, 10) * (2 - sr_clamped) + rng.normal(0, 0.5))))
+                    nps_trend = (m_idx - 18) * 0.5
+                    nps_val = int(max(-40, min(35, nps_base * sr_clamped + nps_trend + rng.normal(0, 7))))
+                    # Repeat: more variance, event-sensitive
+                    repeat_base = base_repeat_map.get(asp, 10)
+                    repeat_val = int(max(1, min(25, repeat_base * (1.8 - sr_clamped * 0.8) + rng.normal(0, 2))))
                     asp_kpis[asp]["cost"].append(cost_val)
                     asp_kpis[asp]["sla"].append(sla_val)
                     asp_kpis[asp]["nps"].append(nps_val)
@@ -1030,7 +1035,7 @@ def _tab_rebalancing(settings):
             ("sla", "SLA %", [55, 105]),
             ("nps", "NPS", [-45, 40]),
             ("repeat", "Repeat %", [0, 28]),
-            ("alloc", "Allocation Share %", [0, 80]),
+            ("alloc", "Allocation Share %", [0, 75]),
         ]:
             fig = go.Figure()
             for asp in all_asps:
@@ -1081,34 +1086,38 @@ def _tab_scenarios(settings):
             "budget_factor": 0.85,
             "constraint_mods": {},
             "message": "Cost can be reduced, but not by violating critical safety, certification or capacity constraints.",
+            "hard_rules": "Safety thresholds, certification gates, capacity limits",
             "presenter": "The system optimizes cost, but it does not trade away safety.",
         },
-        "sla_recovery": {
-            "icon": "📈", "title": "SLA Recovery",
-            "subtitle": "SLA becomes top priority to protect contracts",
-            "weights": {"cost": 10, "safety": 25, "sla": 45, "nps": 15, "repeat_visits": 5},
-            "budget_factor": 1.0,
+        "customer_crisis": {
+            "icon": "😡", "title": "Customer Crisis",
+            "subtitle": "NPS crashed — customer experience is #1 priority",
+            "weights": {"cost": 5, "safety": 20, "sla": 20, "nps": 45, "repeat_visits": 10},
+            "budget_factor": 1.1,
             "constraint_mods": {},
-            "message": "The system protects contractual performance when SLA risk rises.",
-            "presenter": "When SLA risk becomes critical, the engine accepts some cost increase to protect the contract.",
+            "message": "When customers revolt, the system shifts volume to ASPs that deliver the best experience — even at higher cost.",
+            "hard_rules": "Safety thresholds, capacity limits, max ASP share",
+            "presenter": "Customer trust is rebuilt by actions, not promises. The engine acts on NPS signals immediately.",
         },
         "bad_weather": {
-            "icon": "🌧️", "title": "Bad Mountain Weather",
-            "subtitle": "Mountain capacity −20%, access difficulty high",
-            "weights": {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10},
+            "icon": "⛈️", "title": "Severe Weather",
+            "subtitle": "Storm hits Mountain & Climb — capacity −25%",
+            "weights": {"cost": 20, "safety": 35, "sla": 25, "nps": 10, "repeat_visits": 10},
             "budget_factor": 1.0,
-            "constraint_mods": {"mountain_weather_reduction": 0.20},
-            "message": "The system changes allocation before SLA is breached.",
-            "presenter": "The engine does not wait for SLA failure. It anticipates operational risk and adjusts the plan.",
+            "constraint_mods": {"weather_mountain_climb": True},
+            "message": "The system anticipates operational risk and adjusts allocation before SLA breaches occur.",
+            "hard_rules": "Safety enforcement for Climb, capacity cannot exceed weather-reduced limits",
+            "presenter": "The engine does not wait for SLA failure. It anticipates risk and protects delivery.",
         },
-        "climb_cert_issue": {
-            "icon": "🚫", "title": "Climb Certification Issue",
-            "subtitle": "Climb ASP 2 loses certification → 0 tasks",
+        "asp_exit": {
+            "icon": "🚪", "title": "ASP Market Exit",
+            "subtitle": "Urban ASP 1 and Mountain ASP 3 leave the market",
             "weights": {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10},
             "budget_factor": 1.0,
-            "constraint_mods": {"climb_asp2_blocked": True},
-            "message": "Safety is not a preference. It is a gate.",
-            "presenter": "For high-risk work, safety is not optimized. It is enforced.",
+            "constraint_mods": {"block_urban1_mountain3": True},
+            "message": "When ASPs exit, the system immediately redistributes volume while respecting all remaining constraints.",
+            "hard_rules": "Remaining ASPs cannot exceed capacity or max share — infeasibility is flagged honestly",
+            "presenter": "A good prescriptive system tells you both what to do and when the model can no longer meet demand.",
         },
     }
 
@@ -1152,16 +1161,16 @@ def _tab_scenarios(settings):
     settings_sc["constraints"] = {**settings["constraints"], "budget": sc_budget,
                                    "max_share": cs.get("max_share", settings["constraints"]["max_share"])}
 
-    if sc["constraint_mods"].get("climb_asp2_blocked"):
-        sme_effects_sc["climb_ineligible_override"] = True
-
     constraints_sc = build_constraints(settings_sc, sme_effects_sc, scored_sc)
     constraints_sc["planning_weeks"] = st.session_state.get("planning_weeks", 4)
 
-    if sc["constraint_mods"].get("climb_asp2_blocked"):
-        constraints_sc["climb_ineligible"].append("Climb ASP 2")
-    if sc["constraint_mods"].get("mountain_weather_reduction"):
-        constraints_sc["weather_reduction_by_profile"] = {"mountain": 0.20, "urban": 0, "climb": 0}
+    # Apply scenario-specific constraint modifications
+    if sc["constraint_mods"].get("weather_mountain_climb"):
+        constraints_sc["weather_reduction_by_profile"] = {"mountain": 0.25, "urban": 0, "climb": 0.20}
+    if sc["constraint_mods"].get("block_urban1_mountain3"):
+        # Zero out blocked ASPs by setting their capacity to 0
+        constraints_sc["capacity"]["urban_asp_1"] = 0
+        constraints_sc["capacity"]["mountain_asp_3"] = 0
 
     result_sc = optimize_allocation(scored_sc, constraints_sc, demands)
     pct_sc = allocation_to_pct(result_sc["allocations"], demands)
@@ -1170,46 +1179,31 @@ def _tab_scenarios(settings):
     col_before, col_after = st.columns(2)
     with col_before:
         st.markdown("**Current Allocation**")
-        fig_b = _scenario_bar(pct_base, "Current")
-        st.plotly_chart(fig_b, use_container_width=True)
+        st.plotly_chart(_scenario_bar(pct_base, "Current"), use_container_width=True)
     with col_after:
         st.markdown(f"**After: {sc['title']}**")
-        fig_a = _scenario_bar(pct_sc, sc["title"])
-        st.plotly_chart(fig_a, use_container_width=True)
+        st.plotly_chart(_scenario_bar(pct_sc, sc["title"]), use_container_width=True)
 
-    # Key changes
-    st.subheader("Key Changes")
-    for profile in ["urban", "mountain", "climb"]:
-        changes = []
-        for asp in pct_base[profile]:
-            before = pct_base[profile].get(asp, 0)
-            after = pct_sc[profile].get(asp, 0)
-            delta = after - before
-            if abs(delta) > 2:
-                arrow = "⬆️" if delta > 0 else "⬇️"
-                changes.append(f"{arrow} {asp}: {before:.0f}% → {after:.0f}% ({delta:+.0f}pp)")
-        if changes:
-            st.markdown(f"**{profile.title()}:** " + " | ".join(changes))
-
-    # Business message
+    # Achievability assessment
     st.divider()
-    st.success(f"💡 **{sc['message']}**")
-
-    # Feasibility
-    if not result_sc["feasible"]:
-        st.error("⚠️ Infeasibility detected:")
+    if result_sc["feasible"]:
+        st.success(f"✅ **Scenario achievable.** {sc['message']}")
+    else:
+        st.warning(f"⚠️ **Partially achievable.** {sc['message']}")
+        st.error("Violations:")
         for r in result_sc["infeasible_reasons"]:
             st.write(f"- {r}")
 
-    # Reason codes for most impacted
-    with st.expander("Reason Codes & Details"):
+    st.markdown(f"🔒 **Cannot be violated:** {sc['hard_rules']}")
+
+    # Reason codes
+    with st.expander("Detailed Reason Codes"):
         for profile in ["urban", "mountain", "climb"]:
             reasons = generate_reason_codes(profile, result_sc["allocations"][profile], scored_sc, constraints_sc)
             st.markdown(f"**{profile.title()}**")
             for asp, codes in reasons.items():
                 alloc = result_sc["allocations"][profile][asp]
-                if alloc == 0 or abs(pct_sc[profile][asp] - pct_base[profile].get(asp, 33)) > 3:
-                    st.write(f"  {asp} ({alloc} tasks): " + "; ".join(codes))
+                st.write(f"  {asp} ({alloc} tasks): " + "; ".join(codes))
 
     st.divider()
     st.markdown(f'> *"{sc["presenter"]}"*')
