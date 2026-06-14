@@ -1061,83 +1061,179 @@ def _tab_rebalancing(settings):
 
 
 def _tab_scenarios(settings):
-    st.header("Scenarios & Dynamic Rebalancing")
-    scenarios = {
-        "Balanced Mode": "balanced",
-        "Cost Pressure": "cost_pressure",
-        "SLA Recovery": "sla_recovery",
-        "Bad Mountain Weather": "bad_mountain_weather",
-        "Climb Certification Issue": "climb_certification_issue",
-        "Next Month Rebalance": "next_month_rebalance",
-    }
-    messages = {
-        "balanced": "Default balanced allocation.",
-        "cost_pressure": "Cost can be reduced, but not by violating critical safety rules.",
-        "sla_recovery": "The system protects contractual performance when SLA risk rises.",
-        "bad_mountain_weather": "The system changes allocation before SLA is breached.",
-        "climb_certification_issue": "Safety is not a preference. It is a gate.",
-        "next_month_rebalance": "Allocation adapts based on recent performance changes.",
+    st.header("What-If Scenarios")
+    st.markdown('> *"Test how the recommendation changes under different business pressures."*')
+
+    if "scored" not in st.session_state or "metrics" not in st.session_state:
+        st.warning("Complete previous tabs first.")
+        return
+
+    import plotly.graph_objects as go
+
+    demands = st.session_state.get("demands", {"urban": 1200, "mountain": 420, "climb": 160})
+
+    # Scenario definitions
+    scenarios_info = {
+        "cost_pressure": {
+            "icon": "💰", "title": "Cost Pressure",
+            "subtitle": "Budget −15%, cost priority doubles",
+            "weights": {"cost": 40, "safety": 25, "sla": 20, "nps": 10, "repeat_visits": 5},
+            "budget_factor": 0.85,
+            "constraint_mods": {},
+            "message": "Cost can be reduced, but not by violating critical safety, certification or capacity constraints.",
+            "presenter": "The system optimizes cost, but it does not trade away safety.",
+        },
+        "sla_recovery": {
+            "icon": "📈", "title": "SLA Recovery",
+            "subtitle": "SLA becomes top priority to protect contracts",
+            "weights": {"cost": 10, "safety": 25, "sla": 45, "nps": 15, "repeat_visits": 5},
+            "budget_factor": 1.0,
+            "constraint_mods": {},
+            "message": "The system protects contractual performance when SLA risk rises.",
+            "presenter": "When SLA risk becomes critical, the engine accepts some cost increase to protect the contract.",
+        },
+        "bad_weather": {
+            "icon": "🌧️", "title": "Bad Mountain Weather",
+            "subtitle": "Mountain capacity −20%, access difficulty high",
+            "weights": {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10},
+            "budget_factor": 1.0,
+            "constraint_mods": {"mountain_weather_reduction": 0.20},
+            "message": "The system changes allocation before SLA is breached.",
+            "presenter": "The engine does not wait for SLA failure. It anticipates operational risk and adjusts the plan.",
+        },
+        "climb_cert_issue": {
+            "icon": "🚫", "title": "Climb Certification Issue",
+            "subtitle": "Climb ASP 2 loses certification → 0 tasks",
+            "weights": {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10},
+            "budget_factor": 1.0,
+            "constraint_mods": {"climb_asp2_blocked": True},
+            "message": "Safety is not a preference. It is a gate.",
+            "presenter": "For high-risk work, safety is not optimized. It is enforced.",
+        },
     }
 
-    cols = st.columns(3)
+    # Compute baseline (current recommendation)
+    scored_base = st.session_state["scored"]
+    sme_obs = get_active_observations()
+    sme_effects_base = get_engine_effects(sme_obs)
+    cs = st.session_state.get("constraint_settings", {})
+    budget_base = cs.get("budget", st.session_state.get("budget", settings["constraints"]["budget"]))
+
+    settings_base = settings.copy()
+    settings_base["constraints"] = {**settings["constraints"], "budget": budget_base,
+                                     "max_share": cs.get("max_share", settings["constraints"]["max_share"])}
+    constraints_base = build_constraints(settings_base, sme_effects_base, scored_base)
+    constraints_base["planning_weeks"] = st.session_state.get("planning_weeks", 4)
+    result_base = optimize_allocation(scored_base, constraints_base, demands)
+    pct_base = allocation_to_pct(result_base["allocations"], demands)
+
+    # Scenario buttons
+    st.subheader("Select Scenario")
+    cols = st.columns(4)
     selected = None
-    for i, (label, key) in enumerate(scenarios.items()):
-        if cols[i % 3].button(label, key=f"sc_{key}"):
+    for i, (key, info) in enumerate(scenarios_info.items()):
+        if cols[i].button(f"{info['icon']} {info['title']}", key=f"sc_{key}", use_container_width=True):
             selected = key
 
-    if selected and "scored" in st.session_state:
-        mod_settings = apply_scenario(selected, settings)
-        scored = st.session_state["scored"]
-        # Re-score with new weights
-        weights = mod_settings["weights"]
-        scored = compute_scores(st.session_state["metrics"], weights)
+    if not selected:
+        st.info("👆 Select a scenario to see how the recommendation changes.")
+        return
 
-        sme_obs = get_active_observations()
-        sme_effects = get_engine_effects(sme_obs)
+    sc = scenarios_info[selected]
+    st.markdown(f"### {sc['icon']} {sc['title']}")
+    st.caption(sc["subtitle"])
 
-        # Handle special constraint overrides
-        if selected == "climb_certification_issue":
-            sme_effects["climb_ineligible_override"] = ["Climb ASP 2"]
-        if selected == "bad_mountain_weather":
-            sme_effects["weather_capacity_reduction"] = True
+    # Compute scenario result
+    scored_sc = compute_scores(st.session_state["metrics"], sc["weights"])
+    sme_effects_sc = get_engine_effects(sme_obs)
 
-        full_constraints = build_constraints(mod_settings, sme_effects, scored)
-        if selected == "climb_certification_issue":
-            full_constraints["climb_ineligible"].append("Climb ASP 2")
+    settings_sc = settings.copy()
+    sc_budget = int(budget_base * sc["budget_factor"])
+    settings_sc["constraints"] = {**settings["constraints"], "budget": sc_budget,
+                                   "max_share": cs.get("max_share", settings["constraints"]["max_share"])}
 
-        result = optimize_allocation(scored, full_constraints)
-        pct = allocation_to_pct(result["allocations"])
+    if sc["constraint_mods"].get("climb_asp2_blocked"):
+        sme_effects_sc["climb_ineligible_override"] = True
 
-        st.info(messages.get(selected, ""))
-        st.plotly_chart(allocation_bar_chart(pct), use_container_width=True)
-        if not result["feasible"]:
-            st.error("Infeasible: " + "; ".join(result["infeasible_reasons"]))
+    constraints_sc = build_constraints(settings_sc, sme_effects_sc, scored_sc)
+    constraints_sc["planning_weeks"] = st.session_state.get("planning_weeks", 4)
 
-    # Dynamic rebalancing timeline
-    st.subheader("Dynamic Rebalancing Timeline")
-    st.markdown("""
-```
-Week 1 ─── Week 2 ─── Week 3 ─── Week 4 ─── Next Plan
-```
+    if sc["constraint_mods"].get("climb_asp2_blocked"):
+        constraints_sc["climb_ineligible"].append("Climb ASP 2")
+    if sc["constraint_mods"].get("mountain_weather_reduction"):
+        constraints_sc["weather_reduction_by_profile"] = {"mountain": 0.20, "urban": 0, "climb": 0}
 
-**Mountain ASP 2:** SLA drops from 94% to 84%, repeat visits increase.
-Recommended share: 55% → 35%.
+    result_sc = optimize_allocation(scored_sc, constraints_sc, demands)
+    pct_sc = allocation_to_pct(result_sc["allocations"], demands)
 
-**Climb ASP 1:** Certification coverage improves, safety stabilizes.
-Recommended share: 5% → 15%, still capped until confidence improves.
-""")
+    # Display: Before vs After
+    col_before, col_after = st.columns(2)
+    with col_before:
+        st.markdown("**Current Allocation**")
+        fig_b = _scenario_bar(pct_base, "Current")
+        st.plotly_chart(fig_b, use_container_width=True)
+    with col_after:
+        st.markdown(f"**After: {sc['title']}**")
+        fig_a = _scenario_bar(pct_sc, sc["title"])
+        st.plotly_chart(fig_a, use_container_width=True)
 
-    with st.expander("Technical Details"):
-        st.markdown("""
-**Method:** What-if simulation, adaptive learning.
+    # Key changes
+    st.subheader("Key Changes")
+    for profile in ["urban", "mountain", "climb"]:
+        changes = []
+        for asp in pct_base[profile]:
+            before = pct_base[profile].get(asp, 0)
+            after = pct_sc[profile].get(asp, 0)
+            delta = after - before
+            if abs(delta) > 2:
+                arrow = "⬆️" if delta > 0 else "⬇️"
+                changes.append(f"{arrow} {asp}: {before:.0f}% → {after:.0f}% ({delta:+.0f}pp)")
+        if changes:
+            st.markdown(f"**{profile.title()}:** " + " | ".join(changes))
 
-**Possible production methods:** Contextual bandits, reinforcement learning, Markov decision processes, agentic orchestration.
+    # Business message
+    st.divider()
+    st.success(f"💡 **{sc['message']}**")
 
-**Production considerations:**
-- Cap allocation changes at 15pp per cycle
-- Use recent_weight=0.70, historical_weight=0.30
-- Do not overreact to one bad week
-""")
+    # Feasibility
+    if not result_sc["feasible"]:
+        st.error("⚠️ Infeasibility detected:")
+        for r in result_sc["infeasible_reasons"]:
+            st.write(f"- {r}")
+
+    # Reason codes for most impacted
+    with st.expander("Reason Codes & Details"):
+        for profile in ["urban", "mountain", "climb"]:
+            reasons = generate_reason_codes(profile, result_sc["allocations"][profile], scored_sc, constraints_sc)
+            st.markdown(f"**{profile.title()}**")
+            for asp, codes in reasons.items():
+                alloc = result_sc["allocations"][profile][asp]
+                if alloc == 0 or abs(pct_sc[profile][asp] - pct_base[profile].get(asp, 33)) > 3:
+                    st.write(f"  {asp} ({alloc} tasks): " + "; ".join(codes))
+
+    st.divider()
+    st.markdown(f'> *"{sc["presenter"]}"*')
+
+
+def _scenario_bar(pct: dict, title: str):
+    """Small allocation bar for scenario comparison."""
+    import plotly.graph_objects as go
+    fig = go.Figure()
+    colors = {"1": "#90EE90", "2": "#636EFA", "3": "#EF553B"}
+    for asp_num in ["1", "2", "3"]:
+        x_vals, y_vals, text_vals = [], [], []
+        for profile in reversed(["urban", "mountain", "climb"]):
+            for asp, p in pct.get(profile, {}).items():
+                if asp[-1] == asp_num:
+                    x_vals.append(p)
+                    y_vals.append(profile.title())
+                    text_vals.append(f"{p:.0f}%")
+        fig.add_trace(go.Bar(name=f"ASP {asp_num}", x=x_vals, y=y_vals, orientation="h",
+                             marker_color=colors[asp_num], text=text_vals, textposition="inside",
+                             textfont=dict(color="black")))
+    fig.update_layout(barmode="stack", height=180, margin=dict(l=10, r=10, t=10, b=10),
+                      showlegend=False, xaxis_title="Share (%)")
+    return fig
 
 
 def _tab_engine_view(settings):
