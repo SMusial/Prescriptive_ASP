@@ -29,6 +29,12 @@ def optimize_allocation(scored_df: pd.DataFrame, constraints: dict, demands: dic
             if profile == "climb" and asp in constraints.get("climb_ineligible", []):
                 allocation[asp] = 0
                 continue
+            # Check capacity - ASPs with 0 capacity are blocked
+            key = asp.lower().replace(" ", "_")
+            raw_cap = constraints["capacity"].get(key, demand * 2)
+            if raw_cap <= 0:
+                allocation[asp] = 0
+                continue
             eligible.append(asp)
 
         if not eligible:

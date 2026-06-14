@@ -1086,7 +1086,7 @@ def _tab_scenarios(settings):
             "budget_factor": 0.85,
             "constraint_mods": {},
             "message": "Cost can be reduced, but not by violating critical safety, certification or capacity constraints.",
-            "hard_rules": "Safety thresholds, certification gates, capacity limits",
+            "risks": "⚠️ SLA may drop for profiles where cheap ASPs have weaker delivery | NPS likely decreases | Repeat visits may increase",
             "presenter": "The system optimizes cost, but it does not trade away safety.",
         },
         "customer_crisis": {
@@ -1096,17 +1096,17 @@ def _tab_scenarios(settings):
             "budget_factor": 1.1,
             "constraint_mods": {},
             "message": "When customers revolt, the system shifts volume to ASPs that deliver the best experience — even at higher cost.",
-            "hard_rules": "Safety thresholds, capacity limits, max ASP share",
+            "risks": "⚠️ Cost per task increases significantly | Budget pressure rises | Cheaper ASPs lose volume despite being operationally capable",
             "presenter": "Customer trust is rebuilt by actions, not promises. The engine acts on NPS signals immediately.",
         },
         "bad_weather": {
             "icon": "⛈️", "title": "Severe Weather",
-            "subtitle": "Storm hits Mountain & Climb — capacity −25%",
+            "subtitle": "Storm hits Mountain & Climb — capacity −25%/−20%",
             "weights": {"cost": 20, "safety": 35, "sla": 25, "nps": 10, "repeat_visits": 10},
             "budget_factor": 1.0,
             "constraint_mods": {"weather_mountain_climb": True},
             "message": "The system anticipates operational risk and adjusts allocation before SLA breaches occur.",
-            "hard_rules": "Safety enforcement for Climb, capacity cannot exceed weather-reduced limits",
+            "risks": "⚠️ Mountain & Climb SLA at risk due to reduced capacity | Infeasibility if demand exceeds remaining capacity | Some tasks may need rescheduling",
             "presenter": "The engine does not wait for SLA failure. It anticipates risk and protects delivery.",
         },
         "asp_exit": {
@@ -1116,7 +1116,7 @@ def _tab_scenarios(settings):
             "budget_factor": 1.0,
             "constraint_mods": {"block_urban1_mountain3": True},
             "message": "When ASPs exit, the system immediately redistributes volume while respecting all remaining constraints.",
-            "hard_rules": "Remaining ASPs cannot exceed capacity or max share — infeasibility is flagged honestly",
+            "risks": "⚠️ Urban loses cheapest ASP → cost rises | Mountain loses backup capacity → concentration risk | Remaining ASPs may hit capacity limits",
             "presenter": "A good prescriptive system tells you both what to do and when the model can no longer meet demand.",
         },
     }
@@ -1194,7 +1194,7 @@ def _tab_scenarios(settings):
         for r in result_sc["infeasible_reasons"]:
             st.write(f"- {r}")
 
-    st.markdown(f"🔒 **Cannot be violated:** {sc['hard_rules']}")
+    st.markdown(f"{sc['risks']}")
 
     # Reason codes
     with st.expander("Detailed Reason Codes"):
