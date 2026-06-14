@@ -1,0 +1,42 @@
+balanced:
+  description: "Reset to default weights and constraints"
+  weight_overrides: {}
+  constraint_overrides: {}
+
+cost_pressure:
+  description: "Budget reduced by 15%, cost weight increases"
+  weight_overrides:
+    cost: 40
+  constraint_overrides:
+    budget: 153000
+
+sla_recovery:
+  description: "SLA priority increases"
+  weight_overrides:
+    sla: 45
+  constraint_overrides: {}
+
+bad_mountain_weather:
+  description: "Mountain weather risk High, capacity reduced 20%"
+  weight_overrides: {}
+  constraint_overrides:
+    mountain_weather: high
+    mountain_capacity_reduction: 0.20
+
+climb_certification_issue:
+  description: "Climb ASP 2 loses certification"
+  weight_overrides: {}
+  constraint_overrides:
+    climb_asp_2_certified: false
+
+next_month_rebalance:
+  description: "Performance update and rebalancing"
+  weight_overrides: {}
+  constraint_overrides: {}
+  performance_updates:
+    mountain_asp_2:
+      sla_delta: -0.10
+      repeat_visit_delta: 0.05
+    climb_asp_1:
+      safety_delta: 0.05
+      repeat_visit_delta: -0.03
