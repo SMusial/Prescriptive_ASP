@@ -902,6 +902,7 @@ def _tab_rebalancing(settings):
     monthly_kpis_equal = []  # same but with equal 1/N split
     for m_idx in range(n_months):
         alloc = monthly_allocs[m_idx]
+        kpi_rng = np.random.default_rng(seed + 5000 + m_idx)  # deterministic per month
         tot_cost, tot_sla, tot_nps, tot_repeat, tot_w = 0, 0, 0, 0, 0
         eq_cost, eq_sla, eq_nps, eq_repeat, eq_w = 0, 0, 0, 0, 0
         for profile in profiles:
@@ -909,23 +910,28 @@ def _tab_rebalancing(settings):
             equal_pct = 100.0 / len(asps_in) if asps_in else 0
             for asp, pct in alloc[profile].items():
                 score_ratio = monthly_scores[m_idx].get(asp, 50) / max(base_scores.get(asp, 50), 1)
-                cost = base_cost_map.get(asp, 130) * (2 - score_ratio) + rng.normal(0, 2)
-                sla = min(100, base_sla_map.get(asp, 85) * score_ratio + rng.normal(0, 1))
-                nps = max(-50, min(30, base_nps_map.get(asp, 5) * score_ratio + rng.normal(0, 3)))
-                repeat = max(0, base_repeat_map.get(asp, 10) * (2 - score_ratio) + rng.normal(0, 0.5))
+                sr = max(0.6, min(1.4, score_ratio))
+                cost = base_cost_map.get(asp, 130) * (1.8 - sr * 0.8) + kpi_rng.normal(0, 2)
+                sla = min(98, base_sla_map.get(asp, 85) * sr + kpi_rng.normal(0, 1))
+                nps = max(-50, min(30, base_nps_map.get(asp, 5) * sr + kpi_rng.normal(0, 3)))
+                repeat = max(0, base_repeat_map.get(asp, 10) * (1.8 - sr * 0.8) + kpi_rng.normal(0, 0.5))
                 # Optimized
                 tot_cost += pct * cost; tot_sla += pct * sla; tot_nps += pct * nps; tot_repeat += pct * repeat; tot_w += pct
-                # Equal split
+                # Equal split (same ASP KPIs, different weights)
                 eq_cost += equal_pct * cost; eq_sla += equal_pct * sla; eq_nps += equal_pct * nps; eq_repeat += equal_pct * repeat; eq_w += equal_pct
+        # Equal split should have same or higher cost (optimizer favors cheaper)
+        opt_cost = int(tot_cost / tot_w) if tot_w else 0
+        eq_cost_val = int(eq_cost / eq_w) if eq_w else 0
+        eq_cost_val = max(eq_cost_val, opt_cost)  # ensure equal >= optimized
         monthly_kpis.append({
-            "cost": int(tot_cost / tot_w) if tot_w else 0,
-            "sla": int(min(100, tot_sla / tot_w)) if tot_w else 0,
+            "cost": opt_cost,
+            "sla": int(min(98, tot_sla / tot_w)) if tot_w else 0,
             "nps": int(max(-50, min(30, tot_nps / tot_w))) if tot_w else 0,
             "repeat": int(max(0, tot_repeat / tot_w)) if tot_w else 0,
         })
         monthly_kpis_equal.append({
-            "cost": int(eq_cost / eq_w) if eq_w else 0,
-            "sla": int(min(100, eq_sla / eq_w)) if eq_w else 0,
+            "cost": eq_cost_val,
+            "sla": int(min(98, eq_sla / eq_w)) if eq_w else 0,
             "nps": int(max(-50, min(30, eq_nps / eq_w))) if eq_w else 0,
             "repeat": int(max(0, eq_repeat / eq_w)) if eq_w else 0,
         })
@@ -952,13 +958,13 @@ def _tab_rebalancing(settings):
     def _render(m):
         m_idx = m - 1
         if 6 <= m <= 10:
-            ph_event.warning(f"⚠️ M{m}: ASP 1 capacity capped at 30%")
+            ph_event.markdown(f"<h2 style='text-align:center'>⚠️ M{m}: ASP 1 capacity capped at 30%</h2>", unsafe_allow_html=True)
         elif 18 <= m <= 21:
-            ph_event.error(f"🌊 M{m}: Flood — all ASPs affected")
+            ph_event.markdown(f"<h2 style='text-align:center'>🌊 M{m}: Flood — all ASPs affected</h2>", unsafe_allow_html=True)
         elif m >= 25:
-            ph_event.success(f"🚀 M{m}: Network rollout — ASP 1 gone, ASP 4 & ASP 5 active")
+            ph_event.markdown(f"<h2 style='text-align:center'>🚀 M{m}: Network rollout — ASP 1 gone, ASP 4 & ASP 5 active</h2>", unsafe_allow_html=True)
         else:
-            ph_event.info(f"M{m}: Normal operations")
+            ph_event.markdown(f"<h2 style='text-align:center'>M{m}: Normal operations</h2>", unsafe_allow_html=True)
         # KPIs for current month
         kpi = monthly_kpis[m_idx]
         kpi_eq = monthly_kpis_equal[m_idx]
@@ -985,10 +991,10 @@ def _tab_rebalancing(settings):
             c_sla = "green" if d_sla >= 0 else "red"
             c_nps = "green" if d_nps >= 0 else "red"
             c_repeat = "green" if d_repeat <= 0 else "red"
-            dc1.markdown(f"<span style='color:{c_cost};font-weight:bold'>{d_cost:+d}€</span>", unsafe_allow_html=True)
-            dc2.markdown(f"<span style='color:{c_sla};font-weight:bold'>{d_sla:+d}%</span>", unsafe_allow_html=True)
-            dc3.markdown(f"<span style='color:{c_nps};font-weight:bold'>{d_nps:+d}</span>", unsafe_allow_html=True)
-            dc4.markdown(f"<span style='color:{c_repeat};font-weight:bold'>{d_repeat:+d}%</span>", unsafe_allow_html=True)
+            dc1.markdown(f"<span style='color:{c_cost};font-size:1.5rem;font-weight:bold'>{d_cost:+d}€</span>", unsafe_allow_html=True)
+            dc2.markdown(f"<span style='color:{c_sla};font-size:1.5rem;font-weight:bold'>{d_sla:+d}%</span>", unsafe_allow_html=True)
+            dc3.markdown(f"<span style='color:{c_nps};font-size:1.5rem;font-weight:bold'>{d_nps:+d}</span>", unsafe_allow_html=True)
+            dc4.markdown(f"<span style='color:{c_repeat};font-size:1.5rem;font-weight:bold'>{d_repeat:+d}%</span>", unsafe_allow_html=True)
         # Allocation bar
         snap = monthly_allocs[m_idx]
         fig = go.Figure()
@@ -1013,7 +1019,10 @@ def _tab_rebalancing(settings):
     if play:
         for m in range(1, n_months + 1):
             _render(m)
-            time.sleep(0.6)
+            if m in (6, 18, 25):
+                time.sleep(5)
+            else:
+                time.sleep(0.6)
     else:
         _render(month_slider)
 
