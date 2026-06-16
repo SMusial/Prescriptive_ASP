@@ -899,27 +899,35 @@ def _tab_rebalancing(settings):
     base_repeat_map = {row["asp"]: row["smoothed_repeat"] for _, row in scored.iterrows()}
 
     monthly_kpis = []  # list of {cost, sla, nps, repeat}
+    monthly_kpis_equal = []  # same but with equal 1/N split
     for m_idx in range(n_months):
         alloc = monthly_allocs[m_idx]
         tot_cost, tot_sla, tot_nps, tot_repeat, tot_w = 0, 0, 0, 0, 0
+        eq_cost, eq_sla, eq_nps, eq_repeat, eq_w = 0, 0, 0, 0, 0
         for profile in profiles:
+            asps_in = list(alloc[profile].keys())
+            equal_pct = 100.0 / len(asps_in) if asps_in else 0
             for asp, pct in alloc[profile].items():
-                w = pct
                 score_ratio = monthly_scores[m_idx].get(asp, 50) / max(base_scores.get(asp, 50), 1)
                 cost = base_cost_map.get(asp, 130) * (2 - score_ratio) + rng.normal(0, 2)
                 sla = min(100, base_sla_map.get(asp, 85) * score_ratio + rng.normal(0, 1))
                 nps = max(-50, min(30, base_nps_map.get(asp, 5) * score_ratio + rng.normal(0, 3)))
                 repeat = max(0, base_repeat_map.get(asp, 10) * (2 - score_ratio) + rng.normal(0, 0.5))
-                tot_cost += w * cost
-                tot_sla += w * sla
-                tot_nps += w * nps
-                tot_repeat += w * repeat
-                tot_w += w
+                # Optimized
+                tot_cost += pct * cost; tot_sla += pct * sla; tot_nps += pct * nps; tot_repeat += pct * repeat; tot_w += pct
+                # Equal split
+                eq_cost += equal_pct * cost; eq_sla += equal_pct * sla; eq_nps += equal_pct * nps; eq_repeat += equal_pct * repeat; eq_w += equal_pct
         monthly_kpis.append({
             "cost": int(tot_cost / tot_w) if tot_w else 0,
             "sla": int(min(100, tot_sla / tot_w)) if tot_w else 0,
             "nps": int(max(-50, min(30, tot_nps / tot_w))) if tot_w else 0,
             "repeat": int(max(0, tot_repeat / tot_w)) if tot_w else 0,
+        })
+        monthly_kpis_equal.append({
+            "cost": int(eq_cost / eq_w) if eq_w else 0,
+            "sla": int(min(100, eq_sla / eq_w)) if eq_w else 0,
+            "nps": int(max(-50, min(30, eq_nps / eq_w))) if eq_w else 0,
+            "repeat": int(max(0, eq_repeat / eq_w)) if eq_w else 0,
         })
 
     # --- UI ---
@@ -953,12 +961,34 @@ def _tab_rebalancing(settings):
             ph_event.info(f"M{m}: Normal operations")
         # KPIs for current month
         kpi = monthly_kpis[m_idx]
+        kpi_eq = monthly_kpis_equal[m_idx]
         with ph_kpi.container():
+            st.markdown("**Optimized Split**")
             kc1, kc2, kc3, kc4 = st.columns(4)
             kc1.metric("Avg Cost/Task", f"€{kpi['cost']}")
             kc2.metric("SLA %", f"{kpi['sla']}%")
             kc3.metric("NPS", f"{kpi['nps']}")
             kc4.metric("Repeat %", f"{kpi['repeat']}%")
+            st.markdown("**Equal Split (1/N per ASP)**")
+            ec1, ec2, ec3, ec4 = st.columns(4)
+            ec1.metric("Avg Cost/Task", f"€{kpi_eq['cost']}")
+            ec2.metric("SLA %", f"{kpi_eq['sla']}%")
+            ec3.metric("NPS", f"{kpi_eq['nps']}")
+            ec4.metric("Repeat %", f"{kpi_eq['repeat']}%")
+            st.markdown("**Delta (Optimized vs Equal)**")
+            dc1, dc2, dc3, dc4 = st.columns(4)
+            d_cost = kpi['cost'] - kpi_eq['cost']
+            d_sla = kpi['sla'] - kpi_eq['sla']
+            d_nps = kpi['nps'] - kpi_eq['nps']
+            d_repeat = kpi['repeat'] - kpi_eq['repeat']
+            c_cost = "green" if d_cost <= 0 else "red"
+            c_sla = "green" if d_sla >= 0 else "red"
+            c_nps = "green" if d_nps >= 0 else "red"
+            c_repeat = "green" if d_repeat <= 0 else "red"
+            dc1.markdown(f"<span style='color:{c_cost};font-weight:bold'>{d_cost:+d}€</span>", unsafe_allow_html=True)
+            dc2.markdown(f"<span style='color:{c_sla};font-weight:bold'>{d_sla:+d}%</span>", unsafe_allow_html=True)
+            dc3.markdown(f"<span style='color:{c_nps};font-weight:bold'>{d_nps:+d}</span>", unsafe_allow_html=True)
+            dc4.markdown(f"<span style='color:{c_repeat};font-weight:bold'>{d_repeat:+d}%</span>", unsafe_allow_html=True)
         # Allocation bar
         snap = monthly_allocs[m_idx]
         fig = go.Figure()
