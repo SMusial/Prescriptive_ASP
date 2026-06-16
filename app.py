@@ -784,42 +784,24 @@ def _tab_recommendation(settings):
                 'SME knowledge, causal reasoning, and constraints to recommend what the company should do next."*')
 
 
-def _tab_rebalancing(settings):
-    st.header("Dynamic Rebalancing")
-    st.markdown('> *"Prescriptive analytics is not a one-time recommendation. It is an adaptive decision capability."*')
-
-    if "result" not in st.session_state or "scored" not in st.session_state:
-        st.warning("Complete the Recommendation tab first.")
-        return
-
+def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
+    """Run the 36-month simulation deterministically. Returns cached dict."""
     import numpy as np
-    import plotly.graph_objects as go
-    import time
-
-    scored = st.session_state["scored"]
-    result = st.session_state["result"]
-    demands = st.session_state.get("demands", {"urban": 1200, "mountain": 420, "climb": 160})
-    seed = st.session_state.get("hp_seed", 42)
-
-    # ASP universe
     profiles = ["urban", "mountain", "climb"]
     base_scores = {row["asp"]: row["business_score"] for _, row in scored.iterrows()}
+    base_cost_map = {row["asp"]: row["smoothed_cost"] for _, row in scored.iterrows()}
+    base_sla_map = {row["asp"]: row["smoothed_sla"] for _, row in scored.iterrows()}
+    base_nps_map = {row["asp"]: row["smoothed_nps"] for _, row in scored.iterrows()}
+    base_repeat_map = {row["asp"]: row["smoothed_repeat"] for _, row in scored.iterrows()}
 
-    # Starting allocation from Recommendation
     start_alloc = {}
     for profile, alloc in result["allocations"].items():
         total = sum(alloc.values())
         start_alloc[profile] = {asp: (v / total * 100 if total > 0 else 33.3) for asp, v in alloc.items()}
 
     n_months = 36
-
-    # Use fully deterministic RNG for trends (seeded once, never re-used elsewhere)
     sim_rng = np.random.default_rng(seed + 200)
-    trends = {}
-    for asp in base_scores:
-        trends[asp] = sim_rng.uniform(-0.2, 0.2)
-
-    # Base scores for new ASPs (M25+)
+    trends = {asp: sim_rng.uniform(-0.2, 0.2) for asp in base_scores}
     for profile in profiles:
         p = profile.title()
         base_scores[f"{p} ASP 4"] = sim_rng.uniform(40, 60)
@@ -832,7 +814,6 @@ def _tab_rebalancing(settings):
     prev_alloc = {p: dict(a) for p, a in start_alloc.items()}
 
     for month in range(1, n_months + 1):
-        # Deterministic noise per month
         m_rng = np.random.default_rng(seed + 300 + month)
         month_score = {}
         active_asps = {}
@@ -842,7 +823,6 @@ def _tab_rebalancing(settings):
                 active_asps[profile] = [f"{p} ASP 1", f"{p} ASP 2", f"{p} ASP 3"]
             else:
                 active_asps[profile] = [f"{p} ASP 2", f"{p} ASP 3", f"{p} ASP 4", f"{p} ASP 5"]
-
         for profile in profiles:
             for asp in active_asps[profile]:
                 noise = m_rng.normal(0, 1.2)
@@ -861,84 +841,75 @@ def _tab_rebalancing(settings):
                         event = 10 + (month - 25) * 0.4
                 month_score[asp] = max(5, min(95, base_scores.get(asp, 40) + drift + noise + event))
 
-        # M1: use exact Recommendation allocation
         if month == 1:
             monthly_scores.append(month_score)
             monthly_allocs.append({p: dict(a) for p, a in start_alloc.items()})
             continue
 
-        # Allocate per profile
         month_alloc = {}
         for profile in profiles:
             asps = active_asps[profile]
             scores_p = {a: month_score.get(a, 30) for a in asps}
             score_total = sum(max(s, 1) ** 2 for s in scores_p.values())
-            raw = {}
-            for asp in asps:
-                r = max(scores_p[asp], 1) ** 2 / score_total * 100
-                raw[asp] = max(5, min(70.0, r))
+            raw = {asp: max(5, min(max_share_pct, max(scores_p[asp], 1) ** 2 / score_total * 100)) for asp in asps}
             t = sum(raw.values())
-            for asp in asps:
-                raw[asp] = raw[asp] / t * 100
-            # Movement cap 5pp
+            raw = {a: raw[a] / t * 100 for a in asps}
             for asp in asps:
                 prev = prev_alloc.get(profile, {}).get(asp, 100 / len(asps))
                 raw[asp] = prev + max(-5, min(5, raw[asp] - prev))
-            # Hard enforce ASP 1 cap at 30% during M6-M10
             if 6 <= month <= 10:
                 for asp in asps:
                     if asp.endswith("ASP 1") and raw[asp] > 30:
                         excess = raw[asp] - 30
                         raw[asp] = 30
-                        others = [a for a in asps if a != asp]
-                        for o in others:
-                            raw[o] += excess / len(others)
+                        for o in [a for a in asps if a != asp]:
+                            raw[o] += excess / (len(asps) - 1)
+            for asp in asps:
+                if raw[asp] > max_share_pct:
+                    excess = raw[asp] - max_share_pct
+                    raw[asp] = max_share_pct
+                    for o in [a for a in asps if a != asp]:
+                        raw[o] += excess / (len(asps) - 1)
             t = sum(raw.values())
-            final = {asp: round(raw[asp] / t * 100, 1) for asp in asps}
-            month_alloc[profile] = final
-            prev_alloc[profile] = final
-
+            month_alloc[profile] = {asp: round(raw[asp] / t * 100, 1) for asp in asps}
+            prev_alloc[profile] = month_alloc[profile]
         monthly_scores.append(month_score)
         monthly_allocs.append(month_alloc)
 
-    # Compute monthly KPIs (aggregated) using base metrics + score-correlated variation
-    base_cost_map = {row["asp"]: row["smoothed_cost"] for _, row in scored.iterrows()}
-    base_sla_map = {row["asp"]: row["smoothed_sla"] for _, row in scored.iterrows()}
-    base_nps_map = {row["asp"]: row["smoothed_nps"] for _, row in scored.iterrows()}
-    base_repeat_map = {row["asp"]: row["smoothed_repeat"] for _, row in scored.iterrows()}
-
-    monthly_kpis = []  # list of {cost, sla, nps, repeat}
-    monthly_kpis_equal = []  # same but with equal 1/N split
+    # KPIs
     weights_used = st.session_state.get("weights", {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10})
     w_total = sum(weights_used.values()) or 100
-    # Weight-driven improvement factor: higher weight = bigger improvement vs equal
-    w_factor = {
-        "cost": weights_used.get("cost", 20) / w_total,
-        "sla": weights_used.get("sla", 25) / w_total,
-        "nps": weights_used.get("nps", 15) / w_total,
-        "repeat": weights_used.get("repeat_visits", 10) / w_total,
-    }
+    w_factor = {"cost": weights_used.get("cost", 20) / w_total, "sla": weights_used.get("sla", 25) / w_total,
+                "nps": weights_used.get("nps", 15) / w_total, "repeat": weights_used.get("repeat_visits", 10) / w_total}
 
+    rec_kpis_m1 = _compute_weighted_kpis(scored, result["allocations"], demands)
+    equal_alloc_m1 = {p: {a: sum(result["allocations"][p].values()) // len(result["allocations"][p])
+                          for a in result["allocations"][p]} for p in profiles}
+    eq_kpis_m1 = _compute_weighted_kpis(scored, equal_alloc_m1, demands)
+
+    monthly_kpis, monthly_kpis_equal = [], []
     for m_idx in range(n_months):
+        if m_idx == 0:
+            monthly_kpis.append({"cost": int(rec_kpis_m1["Avg Cost/Task"]), "sla": int(rec_kpis_m1["SLA %"]),
+                                 "nps": int(rec_kpis_m1["NPS"]), "repeat": int(rec_kpis_m1["Repeat %"])})
+            monthly_kpis_equal.append({"cost": int(eq_kpis_m1["Avg Cost/Task"]), "sla": int(eq_kpis_m1["SLA %"]),
+                                       "nps": int(eq_kpis_m1["NPS"]), "repeat": int(eq_kpis_m1["Repeat %"])})
+            continue
         alloc = monthly_allocs[m_idx]
-        kpi_rng = np.random.default_rng(seed + 5000 + m_idx)  # deterministic per month
+        kpi_rng = np.random.default_rng(seed + 5000 + m_idx)
         tot_cost, tot_sla, tot_nps, tot_repeat, tot_w = 0, 0, 0, 0, 0
         eq_cost, eq_sla, eq_nps, eq_repeat, eq_w = 0, 0, 0, 0, 0
         for profile in profiles:
             asps_in = list(alloc[profile].keys())
             equal_pct = 100.0 / len(asps_in) if asps_in else 0
             for asp, pct in alloc[profile].items():
-                score_ratio = monthly_scores[m_idx].get(asp, 50) / max(base_scores.get(asp, 50), 1)
-                sr = max(0.6, min(1.4, score_ratio))
+                sr = max(0.6, min(1.4, monthly_scores[m_idx].get(asp, 50) / max(base_scores.get(asp, 50), 1)))
                 cost = base_cost_map.get(asp, 130) * (1.8 - sr * 0.8) + kpi_rng.normal(0, 2)
                 sla = min(98, base_sla_map.get(asp, 85) * sr + kpi_rng.normal(0, 1))
                 nps = max(-50, min(30, base_nps_map.get(asp, 5) * sr + kpi_rng.normal(0, 3)))
                 repeat = max(0, base_repeat_map.get(asp, 10) * (1.8 - sr * 0.8) + kpi_rng.normal(0, 0.5))
-                # Optimized
                 tot_cost += pct * cost; tot_sla += pct * sla; tot_nps += pct * nps; tot_repeat += pct * repeat; tot_w += pct
-                # Equal split
                 eq_cost += equal_pct * cost; eq_sla += equal_pct * sla; eq_nps += equal_pct * nps; eq_repeat += equal_pct * repeat; eq_w += equal_pct
-
         opt_cost = int(tot_cost / tot_w) if tot_w else 0
         opt_sla = int(min(98, tot_sla / tot_w)) if tot_w else 0
         opt_nps = int(max(-50, min(30, tot_nps / tot_w))) if tot_w else 0
@@ -947,19 +918,57 @@ def _tab_rebalancing(settings):
         eq_sla_v = int(min(98, eq_sla / eq_w)) if eq_w else 0
         eq_nps_v = int(max(-50, min(30, eq_nps / eq_w))) if eq_w else 0
         eq_repeat_v = int(max(0, eq_repeat / eq_w)) if eq_w else 0
-
-        # Apply weight-driven improvement: amplify delta for high-weight KPIs
         boost = 8
         opt_cost = int(opt_cost - boost * w_factor["cost"] * 2)
         opt_sla = int(min(98, opt_sla + boost * w_factor["sla"] * 2))
         opt_nps = int(max(-50, min(30, opt_nps + boost * w_factor["nps"] * 4)))
         opt_repeat = int(max(0, opt_repeat - boost * w_factor["repeat"]))
-        # Ensure equal cost >= optimized
         eq_cost_v = max(eq_cost_v, opt_cost)
-
         monthly_kpis.append({"cost": opt_cost, "sla": opt_sla, "nps": opt_nps, "repeat": opt_repeat})
         monthly_kpis_equal.append({"cost": eq_cost_v, "sla": eq_sla_v, "nps": eq_nps_v, "repeat": eq_repeat_v})
 
+    return {"allocs": monthly_allocs, "scores": monthly_scores, "kpis": monthly_kpis,
+            "kpis_equal": monthly_kpis_equal, "n_months": n_months, "base_scores": base_scores,
+            "base_cost_map": base_cost_map, "base_sla_map": base_sla_map,
+            "base_nps_map": base_nps_map, "base_repeat_map": base_repeat_map}
+
+
+def _tab_rebalancing(settings):
+    st.header("Dynamic Rebalancing")
+    st.markdown('> *"Prescriptive analytics is not a one-time recommendation. It is an adaptive decision capability."*')
+
+    if "result" not in st.session_state or "scored" not in st.session_state:
+        st.warning("Complete the Recommendation tab first.")
+        return
+
+    import numpy as np
+    import plotly.graph_objects as go
+    import time
+
+    scored = st.session_state["scored"]
+    result = st.session_state["result"]
+    demands = st.session_state.get("demands", {"urban": 1200, "mountain": 420, "climb": 160})
+    seed = st.session_state.get("hp_seed", 42)
+    cs = st.session_state.get("constraint_settings", {})
+    max_share_pct = cs.get("max_share", 0.60) * 100
+
+    # Cache simulation so it's identical across reruns
+    cache_key = f"rebal_cache_{seed}_{max_share_pct}"
+    if cache_key not in st.session_state:
+        _sim = _run_rebalancing_sim(scored, result, demands, seed, max_share_pct)
+        st.session_state[cache_key] = _sim
+    sim = st.session_state[cache_key]
+    monthly_allocs = sim["allocs"]
+    monthly_scores = sim["scores"]
+    monthly_kpis = sim["kpis"]
+    monthly_kpis_equal = sim["kpis_equal"]
+    n_months = sim["n_months"]
+    base_scores = sim["base_scores"]
+    base_cost_map = sim["base_cost_map"]
+    base_sla_map = sim["base_sla_map"]
+    base_nps_map = sim["base_nps_map"]
+    base_repeat_map = sim["base_repeat_map"]
+    profiles = ["urban", "mountain", "climb"]
     # --- UI ---
     st.markdown("""
 **Our journey to the future:**
@@ -970,11 +979,14 @@ def _tab_rebalancing(settings):
 
     # Controls
     total_tasks_pm = sum(int(v) for v in demands.values())
-    col_play, col_slider = st.columns([1, 3])
+    col_play, col_reset, col_slider = st.columns([1, 1, 3])
     with col_play:
         play = st.button("▶️ Play", key="play_rebal")
+    with col_reset:
+        reset = st.button("⏮️ Reset", key="reset_rebal")
     with col_slider:
-        month_slider = st.slider("Month", 1, 36, 1, key="rebal_m36")
+        default_month = 1 if reset else 1
+        month_slider = st.slider("Month", 1, 36, default_month, key="rebal_m36")
 
     ph_event = st.empty()
     ph_kpi = st.empty()
@@ -1053,6 +1065,8 @@ def _tab_rebalancing(settings):
                 time.sleep(5)
             else:
                 time.sleep(0.6)
+    elif reset:
+        _render(1)
     else:
         _render(month_slider)
 
@@ -1073,22 +1087,19 @@ def _tab_rebalancing(settings):
         asp_kpis = {asp: {"cost": [], "sla": [], "nps": [], "repeat": [], "alloc": []} for asp in all_asps}
         for m_idx in range(n_months):
             alloc_m = monthly_allocs[m_idx].get(pkey, {})
+            det_rng = np.random.default_rng(seed + 7000 + m_idx)
             for asp in all_asps:
                 if asp in alloc_m and asp in monthly_scores[m_idx]:
                     sr = monthly_scores[m_idx][asp] / max(base_scores.get(asp, 50), 1)
                     sr_clamped = max(0.6, min(1.4, sr))
-                    # Cost: more variance
-                    cost_val = max(50, int(base_cost_map.get(asp, 130) * (1.8 - sr_clamped * 0.8) + rng.normal(0, 5)))
-                    # SLA: cap at 98%, more variation
+                    cost_val = max(50, int(base_cost_map.get(asp, 130) * (1.8 - sr_clamped * 0.8) + det_rng.normal(0, 5)))
                     sla_base = min(92, base_sla_map.get(asp, 85))
-                    sla_val = int(max(60, min(98, sla_base * sr_clamped + rng.normal(0, 2))))
-                    # NPS: bigger swings, negative in early months, positive trend
+                    sla_val = int(max(60, min(98, sla_base * sr_clamped + det_rng.normal(0, 2))))
                     nps_base = base_nps_map.get(asp, 0)
                     nps_trend = (m_idx - 18) * 0.5
-                    nps_val = int(max(-40, min(35, nps_base * sr_clamped + nps_trend + rng.normal(0, 7))))
-                    # Repeat: more variance, event-sensitive
+                    nps_val = int(max(-40, min(35, nps_base * sr_clamped + nps_trend + det_rng.normal(0, 7))))
                     repeat_base = base_repeat_map.get(asp, 10)
-                    repeat_val = int(max(1, min(25, repeat_base * (1.8 - sr_clamped * 0.8) + rng.normal(0, 2))))
+                    repeat_val = int(max(1, min(25, repeat_base * (1.8 - sr_clamped * 0.8) + det_rng.normal(0, 2))))
                     asp_kpis[asp]["cost"].append(cost_val)
                     asp_kpis[asp]["sla"].append(sla_val)
                     asp_kpis[asp]["nps"].append(nps_val)
