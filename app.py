@@ -798,10 +798,10 @@ def _tab_rebalancing(settings):
 
     scored = st.session_state["scored"]
     result = st.session_state["result"]
+    demands = st.session_state.get("demands", {"urban": 1200, "mountain": 420, "climb": 160})
     seed = st.session_state.get("hp_seed", 42)
-    rng = np.random.default_rng(seed + 100)
 
-    # ASP universe: M1-M24 = ASP 1,2,3. M25+ = ASP 2,3,4,5 (ASP 1 disappears)
+    # ASP universe
     profiles = ["urban", "mountain", "climb"]
     base_scores = {row["asp"]: row["business_score"] for _, row in scored.iterrows()}
 
@@ -812,25 +812,29 @@ def _tab_rebalancing(settings):
         start_alloc[profile] = {asp: (v / total * 100 if total > 0 else 33.3) for asp, v in alloc.items()}
 
     n_months = 36
+
+    # Use fully deterministic RNG for trends (seeded once, never re-used elsewhere)
+    sim_rng = np.random.default_rng(seed + 200)
     trends = {}
     for asp in base_scores:
-        trends[asp] = rng.uniform(-0.2, 0.2)
+        trends[asp] = sim_rng.uniform(-0.2, 0.2)
 
     # Base scores for new ASPs (M25+)
     for profile in profiles:
         p = profile.title()
-        base_scores[f"{p} ASP 4"] = rng.uniform(40, 60)
-        base_scores[f"{p} ASP 5"] = rng.uniform(35, 55)
-        trends[f"{p} ASP 4"] = rng.uniform(0.3, 0.6)  # growing
-        trends[f"{p} ASP 5"] = rng.uniform(0.2, 0.5)
+        base_scores[f"{p} ASP 4"] = sim_rng.uniform(40, 60)
+        base_scores[f"{p} ASP 5"] = sim_rng.uniform(35, 55)
+        trends[f"{p} ASP 4"] = sim_rng.uniform(0.3, 0.6)
+        trends[f"{p} ASP 5"] = sim_rng.uniform(0.2, 0.5)
 
     monthly_scores = []
-    monthly_allocs = []  # list of {profile: {asp: pct}}
+    monthly_allocs = []
     prev_alloc = {p: dict(a) for p, a in start_alloc.items()}
 
     for month in range(1, n_months + 1):
+        # Deterministic noise per month
+        m_rng = np.random.default_rng(seed + 300 + month)
         month_score = {}
-        # Determine active ASPs
         active_asps = {}
         for profile in profiles:
             p = profile.title()
@@ -841,21 +845,27 @@ def _tab_rebalancing(settings):
 
         for profile in profiles:
             for asp in active_asps[profile]:
-                noise = rng.normal(0, 1.2)
+                noise = m_rng.normal(0, 1.2)
                 drift = trends.get(asp, 0) * month * 0.2
                 event = 0
-                if 6 <= month <= 10 and "1" in asp:
+                if 6 <= month <= 10 and asp.endswith("ASP 1"):
                     event = -18
                 if 18 <= month <= 21:
-                    event = -10 - rng.uniform(0, 5)
+                    event = -10 - m_rng.uniform(0, 5)
                     if profile == "mountain":
                         event -= 4
                 if month >= 25:
                     if "4" in asp or "5" in asp:
                         event = 5 + (month - 25) * 0.6
-                    elif "2" in asp:
+                    elif asp.endswith("ASP 2"):
                         event = 10 + (month - 25) * 0.4
                 month_score[asp] = max(5, min(95, base_scores.get(asp, 40) + drift + noise + event))
+
+        # M1: use exact Recommendation allocation
+        if month == 1:
+            monthly_scores.append(month_score)
+            monthly_allocs.append({p: dict(a) for p, a in start_alloc.items()})
+            continue
 
         # Allocate per profile
         month_alloc = {}
@@ -880,7 +890,6 @@ def _tab_rebalancing(settings):
                     if asp.endswith("ASP 1") and raw[asp] > 30:
                         excess = raw[asp] - 30
                         raw[asp] = 30
-                        # redistribute excess to others
                         others = [a for a in asps if a != asp]
                         for o in others:
                             raw[o] += excess / len(others)
@@ -960,6 +969,7 @@ def _tab_rebalancing(settings):
 """)
 
     # Controls
+    total_tasks_pm = sum(int(v) for v in demands.values())
     col_play, col_slider = st.columns([1, 3])
     with col_play:
         play = st.button("▶️ Play", key="play_rebal")
@@ -975,11 +985,11 @@ def _tab_rebalancing(settings):
         if 6 <= m <= 10:
             color, text = "#fff3cd", f"⚠️ M{m}: ASP 1 capacity capped at 30%"
         elif 18 <= m <= 21:
-            color, text = "#f8d7da", f"🌊 M{m}: Flood — all ASPs affected"
+            color, text = "#cce5ff", f"🌊 M{m}: Flood — all ASPs affected"
         elif m >= 25:
-            color, text = "#d4edda", f"🚀 M{m}: Network rollout — ASP 1 gone, ASP 4 & ASP 5 active"
+            color, text = "#ffffff", f"🚀 M{m}: Network rollout — ASP 1 gone, ASP 4 & ASP 5 active"
         else:
-            color, text = "#e8f4fd", f"M{m}: Normal operations"
+            color, text = "#d4edda", f"M{m}: Normal operations"
         ph_event.markdown(f'<div style="background:{color};padding:16px;border-radius:8px;text-align:center"><span style="font-size:1.5rem;font-weight:bold;color:black">{text}</span></div>', unsafe_allow_html=True)
         # KPIs for current month
         kpi = monthly_kpis[m_idx]
@@ -1012,10 +1022,9 @@ def _tab_rebalancing(settings):
             dc3.markdown(f"<span style='color:{c_nps};font-size:1.5rem;font-weight:bold'>{d_nps:+d}</span>", unsafe_allow_html=True)
             dc4.markdown(f"<span style='color:{c_repeat};font-size:1.5rem;font-weight:bold'>{d_repeat:+d}%</span>", unsafe_allow_html=True)
             # Cumulated cost savings
-            total_tasks_per_month = sum(demands.values())
-            cum_savings = sum((monthly_kpis_equal[i]["cost"] - monthly_kpis[i]["cost"]) * total_tasks_per_month for i in range(m_idx + 1))
+            cum_savings = sum((monthly_kpis_equal[i]["cost"] - monthly_kpis[i]["cost"]) * total_tasks_pm for i in range(m_idx + 1))
             sav_color = "green" if cum_savings >= 0 else "red"
-            dc1.markdown(f"<span style='color:{sav_color};font-size:1.1rem'>Cumulated: €{cum_savings:,}</span>", unsafe_allow_html=True)
+            dc1.markdown(f"<span style='color:{sav_color};font-size:1.1rem'>Cumulated: \u20ac{cum_savings:,}</span>", unsafe_allow_html=True)
         # Allocation bar
         snap = monthly_allocs[m_idx]
         fig = go.Figure()
