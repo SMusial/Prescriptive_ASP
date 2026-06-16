@@ -940,10 +940,10 @@ def _tab_rebalancing(settings):
         eq_repeat_v = int(max(0, eq_repeat / eq_w)) if eq_w else 0
 
         # Apply weight-driven improvement: amplify delta for high-weight KPIs
-        boost = 8  # max improvement points
+        boost = 8
         opt_cost = int(opt_cost - boost * w_factor["cost"] * 2)
-        opt_sla = int(min(98, opt_sla + boost * w_factor["sla"]))
-        opt_nps = int(max(-50, min(30, opt_nps + boost * w_factor["nps"])))
+        opt_sla = int(min(98, opt_sla + boost * w_factor["sla"] * 2))
+        opt_nps = int(max(-50, min(30, opt_nps + boost * w_factor["nps"] * 4)))
         opt_repeat = int(max(0, opt_repeat - boost * w_factor["repeat"]))
         # Ensure equal cost >= optimized
         eq_cost_v = max(eq_cost_v, opt_cost)
@@ -973,13 +973,14 @@ def _tab_rebalancing(settings):
     def _render(m):
         m_idx = m - 1
         if 6 <= m <= 10:
-            ph_event.warning(f"""<h3 style='text-align:center;margin:0'>⚠️ M{m}: ASP 1 capacity capped at 30%</h3>""")
+            color, text = "#fff3cd", f"⚠️ M{m}: ASP 1 capacity capped at 30%"
         elif 18 <= m <= 21:
-            ph_event.error(f"""<h3 style='text-align:center;margin:0'>🌊 M{m}: Flood — all ASPs affected</h3>""")
+            color, text = "#f8d7da", f"🌊 M{m}: Flood — all ASPs affected"
         elif m >= 25:
-            ph_event.success(f"""<h3 style='text-align:center;margin:0'>🚀 M{m}: Network rollout — ASP 1 gone, ASP 4 & ASP 5 active</h3>""")
+            color, text = "#d4edda", f"🚀 M{m}: Network rollout — ASP 1 gone, ASP 4 & ASP 5 active"
         else:
-            ph_event.info(f"""<h3 style='text-align:center;margin:0'>M{m}: Normal operations</h3>""")
+            color, text = "#e8f4fd", f"M{m}: Normal operations"
+        ph_event.markdown(f'<div style="background:{color};padding:16px;border-radius:8px;text-align:center"><span style="font-size:1.5rem;font-weight:bold;color:black">{text}</span></div>', unsafe_allow_html=True)
         # KPIs for current month
         kpi = monthly_kpis[m_idx]
         kpi_eq = monthly_kpis_equal[m_idx]
@@ -1010,6 +1011,11 @@ def _tab_rebalancing(settings):
             dc2.markdown(f"<span style='color:{c_sla};font-size:1.5rem;font-weight:bold'>{d_sla:+d}%</span>", unsafe_allow_html=True)
             dc3.markdown(f"<span style='color:{c_nps};font-size:1.5rem;font-weight:bold'>{d_nps:+d}</span>", unsafe_allow_html=True)
             dc4.markdown(f"<span style='color:{c_repeat};font-size:1.5rem;font-weight:bold'>{d_repeat:+d}%</span>", unsafe_allow_html=True)
+            # Cumulated cost savings
+            total_tasks_per_month = sum(demands.values())
+            cum_savings = sum((monthly_kpis_equal[i]["cost"] - monthly_kpis[i]["cost"]) * total_tasks_per_month for i in range(m_idx + 1))
+            sav_color = "green" if cum_savings >= 0 else "red"
+            dc1.markdown(f"<span style='color:{sav_color};font-size:1.1rem'>Cumulated: €{cum_savings:,}</span>", unsafe_allow_html=True)
         # Allocation bar
         snap = monthly_allocs[m_idx]
         fig = go.Figure()
