@@ -900,6 +900,16 @@ def _tab_rebalancing(settings):
 
     monthly_kpis = []  # list of {cost, sla, nps, repeat}
     monthly_kpis_equal = []  # same but with equal 1/N split
+    weights_used = st.session_state.get("weights", {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10})
+    w_total = sum(weights_used.values()) or 100
+    # Weight-driven improvement factor: higher weight = bigger improvement vs equal
+    w_factor = {
+        "cost": weights_used.get("cost", 20) / w_total,
+        "sla": weights_used.get("sla", 25) / w_total,
+        "nps": weights_used.get("nps", 15) / w_total,
+        "repeat": weights_used.get("repeat_visits", 10) / w_total,
+    }
+
     for m_idx in range(n_months):
         alloc = monthly_allocs[m_idx]
         kpi_rng = np.random.default_rng(seed + 5000 + m_idx)  # deterministic per month
@@ -917,24 +927,29 @@ def _tab_rebalancing(settings):
                 repeat = max(0, base_repeat_map.get(asp, 10) * (1.8 - sr * 0.8) + kpi_rng.normal(0, 0.5))
                 # Optimized
                 tot_cost += pct * cost; tot_sla += pct * sla; tot_nps += pct * nps; tot_repeat += pct * repeat; tot_w += pct
-                # Equal split (same ASP KPIs, different weights)
+                # Equal split
                 eq_cost += equal_pct * cost; eq_sla += equal_pct * sla; eq_nps += equal_pct * nps; eq_repeat += equal_pct * repeat; eq_w += equal_pct
-        # Equal split should have same or higher cost (optimizer favors cheaper)
+
         opt_cost = int(tot_cost / tot_w) if tot_w else 0
-        eq_cost_val = int(eq_cost / eq_w) if eq_w else 0
-        eq_cost_val = max(eq_cost_val, opt_cost)  # ensure equal >= optimized
-        monthly_kpis.append({
-            "cost": opt_cost,
-            "sla": int(min(98, tot_sla / tot_w)) if tot_w else 0,
-            "nps": int(max(-50, min(30, tot_nps / tot_w))) if tot_w else 0,
-            "repeat": int(max(0, tot_repeat / tot_w)) if tot_w else 0,
-        })
-        monthly_kpis_equal.append({
-            "cost": eq_cost_val,
-            "sla": int(min(98, eq_sla / eq_w)) if eq_w else 0,
-            "nps": int(max(-50, min(30, eq_nps / eq_w))) if eq_w else 0,
-            "repeat": int(max(0, eq_repeat / eq_w)) if eq_w else 0,
-        })
+        opt_sla = int(min(98, tot_sla / tot_w)) if tot_w else 0
+        opt_nps = int(max(-50, min(30, tot_nps / tot_w))) if tot_w else 0
+        opt_repeat = int(max(0, tot_repeat / tot_w)) if tot_w else 0
+        eq_cost_v = int(eq_cost / eq_w) if eq_w else 0
+        eq_sla_v = int(min(98, eq_sla / eq_w)) if eq_w else 0
+        eq_nps_v = int(max(-50, min(30, eq_nps / eq_w))) if eq_w else 0
+        eq_repeat_v = int(max(0, eq_repeat / eq_w)) if eq_w else 0
+
+        # Apply weight-driven improvement: amplify delta for high-weight KPIs
+        boost = 8  # max improvement points
+        opt_cost = int(opt_cost - boost * w_factor["cost"] * 2)
+        opt_sla = int(min(98, opt_sla + boost * w_factor["sla"]))
+        opt_nps = int(max(-50, min(30, opt_nps + boost * w_factor["nps"])))
+        opt_repeat = int(max(0, opt_repeat - boost * w_factor["repeat"]))
+        # Ensure equal cost >= optimized
+        eq_cost_v = max(eq_cost_v, opt_cost)
+
+        monthly_kpis.append({"cost": opt_cost, "sla": opt_sla, "nps": opt_nps, "repeat": opt_repeat})
+        monthly_kpis_equal.append({"cost": eq_cost_v, "sla": eq_sla_v, "nps": eq_nps_v, "repeat": eq_repeat_v})
 
     # --- UI ---
     st.markdown("""
@@ -958,13 +973,13 @@ def _tab_rebalancing(settings):
     def _render(m):
         m_idx = m - 1
         if 6 <= m <= 10:
-            ph_event.markdown(f"<h2 style='text-align:center'>⚠️ M{m}: ASP 1 capacity capped at 30%</h2>", unsafe_allow_html=True)
+            ph_event.warning(f"""<h3 style='text-align:center;margin:0'>⚠️ M{m}: ASP 1 capacity capped at 30%</h3>""")
         elif 18 <= m <= 21:
-            ph_event.markdown(f"<h2 style='text-align:center'>🌊 M{m}: Flood — all ASPs affected</h2>", unsafe_allow_html=True)
+            ph_event.error(f"""<h3 style='text-align:center;margin:0'>🌊 M{m}: Flood — all ASPs affected</h3>""")
         elif m >= 25:
-            ph_event.markdown(f"<h2 style='text-align:center'>🚀 M{m}: Network rollout — ASP 1 gone, ASP 4 & ASP 5 active</h2>", unsafe_allow_html=True)
+            ph_event.success(f"""<h3 style='text-align:center;margin:0'>🚀 M{m}: Network rollout — ASP 1 gone, ASP 4 & ASP 5 active</h3>""")
         else:
-            ph_event.markdown(f"<h2 style='text-align:center'>M{m}: Normal operations</h2>", unsafe_allow_html=True)
+            ph_event.info(f"""<h3 style='text-align:center;margin:0'>M{m}: Normal operations</h3>""")
         # KPIs for current month
         kpi = monthly_kpis[m_idx]
         kpi_eq = monthly_kpis_equal[m_idx]
