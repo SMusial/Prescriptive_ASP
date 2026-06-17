@@ -952,8 +952,13 @@ def _tab_rebalancing(settings):
     cs = st.session_state.get("constraint_settings", {})
     max_share_pct = cs.get("max_share", 0.60) * 100
 
-    # Cache simulation so it's identical across reruns
-    cache_key = f"rebal_cache_{seed}_{max_share_pct}"
+    # Cache simulation so it's identical across reruns (invalidates when recommendation changes)
+    result_hash = int(result.get("total_cost", 0))
+    cache_key = f"rebal_cache_{seed}_{max_share_pct}_{result_hash}"
+    # Clear old caches
+    old_keys = [k for k in st.session_state if k.startswith("rebal_cache_") and k != cache_key]
+    for k in old_keys:
+        del st.session_state[k]
     if cache_key not in st.session_state:
         _sim = _run_rebalancing_sim(scored, result, demands, seed, max_share_pct)
         st.session_state[cache_key] = _sim
@@ -970,74 +975,40 @@ def _tab_rebalancing(settings):
     base_repeat_map = sim["base_repeat_map"]
     profiles = ["urban", "mountain", "climb"]
     # --- UI ---
-    st.markdown("""
+    # Controls
+    total_tasks_pm = sum(int(v) for v in demands.values())
+    ph_journey = st.empty()
+    ph_journey.markdown("""
 **Our journey to the future:**
 - **Year 1 (M6–M10):** ASP 1 capped at 30% due to capacity constraints
 - **Year 2 (M18–M21):** Flood hits all ASPs — KPIs and scores drop
 - **Year 3 (M25+):** Network rollout → ASP 1 disappears, ASP 4 and ASP 5 start delivering
 """)
 
-    # Controls
-    total_tasks_pm = sum(int(v) for v in demands.values())
     col_play, col_reset, col_slider = st.columns([1, 1, 3])
     with col_play:
         play = st.button("▶️ Play", key="play_rebal")
     with col_reset:
         reset = st.button("⏮️ Reset", key="reset_rebal")
     with col_slider:
-        default_month = 1 if reset else 1
-        month_slider = st.slider("Month", 1, 36, default_month, key="rebal_m36")
+        month_slider = st.slider("Month", 1, 36, 1, key="rebal_m36")
 
     ph_event = st.empty()
-    ph_kpi = st.empty()
     ph_bar = st.empty()
+    ph_kpi = st.empty()
 
     def _render(m):
         m_idx = m - 1
         if 6 <= m <= 10:
-            color, text = "#fff3cd", f"⚠️ M{m}: ASP 1 capacity capped at 30%"
+            color, text = "#fff3cd", f"\u26a0\ufe0f M{m}: ASP 1 capacity capped at 30%"
         elif 18 <= m <= 21:
-            color, text = "#cce5ff", f"🌊 M{m}: Flood — all ASPs affected"
+            color, text = "#cce5ff", f"\U0001f30a M{m}: Flood \u2014 all ASPs affected"
         elif m >= 25:
-            color, text = "#ffffff", f"🚀 M{m}: Network rollout — ASP 1 gone, ASP 4 & ASP 5 active"
+            color, text = "#ffffff", f"\U0001f680 M{m}: Network rollout \u2014 ASP 1 gone, ASP 4 & ASP 5 active"
         else:
             color, text = "#d4edda", f"M{m}: Normal operations"
         ph_event.markdown(f'<div style="background:{color};padding:16px;border-radius:8px;text-align:center"><span style="font-size:1.5rem;font-weight:bold;color:black">{text}</span></div>', unsafe_allow_html=True)
-        # KPIs for current month
-        kpi = monthly_kpis[m_idx]
-        kpi_eq = monthly_kpis_equal[m_idx]
-        with ph_kpi.container():
-            st.markdown("**Optimized Split**")
-            kc1, kc2, kc3, kc4 = st.columns(4)
-            kc1.metric("Avg Cost/Task", f"€{kpi['cost']}")
-            kc2.metric("SLA %", f"{kpi['sla']}%")
-            kc3.metric("NPS", f"{kpi['nps']}")
-            kc4.metric("Repeat %", f"{kpi['repeat']}%")
-            st.markdown("**Equal Split (1/N per ASP)**")
-            ec1, ec2, ec3, ec4 = st.columns(4)
-            ec1.metric("Avg Cost/Task", f"€{kpi_eq['cost']}")
-            ec2.metric("SLA %", f"{kpi_eq['sla']}%")
-            ec3.metric("NPS", f"{kpi_eq['nps']}")
-            ec4.metric("Repeat %", f"{kpi_eq['repeat']}%")
-            st.markdown("**Delta (Optimized vs Equal)**")
-            dc1, dc2, dc3, dc4 = st.columns(4)
-            d_cost = kpi['cost'] - kpi_eq['cost']
-            d_sla = kpi['sla'] - kpi_eq['sla']
-            d_nps = kpi['nps'] - kpi_eq['nps']
-            d_repeat = kpi['repeat'] - kpi_eq['repeat']
-            c_cost = "green" if d_cost <= 0 else "red"
-            c_sla = "green" if d_sla >= 0 else "red"
-            c_nps = "green" if d_nps >= 0 else "red"
-            c_repeat = "green" if d_repeat <= 0 else "red"
-            dc1.markdown(f"<span style='color:{c_cost};font-size:1.5rem;font-weight:bold'>{d_cost:+d}€</span>", unsafe_allow_html=True)
-            dc2.markdown(f"<span style='color:{c_sla};font-size:1.5rem;font-weight:bold'>{d_sla:+d}%</span>", unsafe_allow_html=True)
-            dc3.markdown(f"<span style='color:{c_nps};font-size:1.5rem;font-weight:bold'>{d_nps:+d}</span>", unsafe_allow_html=True)
-            dc4.markdown(f"<span style='color:{c_repeat};font-size:1.5rem;font-weight:bold'>{d_repeat:+d}%</span>", unsafe_allow_html=True)
-            # Cumulated cost savings
-            cum_savings = sum((monthly_kpis_equal[i]["cost"] - monthly_kpis[i]["cost"]) * total_tasks_pm for i in range(m_idx + 1))
-            sav_color = "green" if cum_savings >= 0 else "red"
-            dc1.markdown(f"<span style='color:{sav_color};font-size:1.1rem'>Cumulated: \u20ac{cum_savings:,}</span>", unsafe_allow_html=True)
-        # Allocation bar
+        # Allocation bar first
         snap = monthly_allocs[m_idx]
         fig = go.Figure()
         color_map = {"1": "#90EE90", "2": "#636EFA", "3": "#EF553B", "4": "#FFA500", "5": "#9467BD"}
@@ -1053,12 +1024,59 @@ def _tab_rebalancing(settings):
             fig.add_trace(go.Bar(name=f"ASP {asp_num}", x=x_vals, y=y_vals, orientation="h",
                                  marker_color=color_map.get(asp_num, "#888"), text=text_vals,
                                  textposition="inside", textfont=dict(color="black")))
-        fig.update_layout(barmode="stack", height=220, title=f"Month {m} — Recommended Task Split",
+        fig.update_layout(barmode="stack", height=220, title=f"Month {m} \u2014 Recommended Task Split",
                           margin=dict(l=20, r=20, t=40, b=10), xaxis_title="Share (%)",
                           legend=dict(orientation="h", y=-0.2))
         ph_bar.plotly_chart(fig, use_container_width=True)
+        # KPIs + moving average
+        kpi = monthly_kpis[m_idx]
+        kpi_eq = monthly_kpis_equal[m_idx]
+        # Compute moving average (last 3 months or available)
+        window = monthly_kpis[max(0, m_idx - 2):m_idx + 1]
+        ma_cost = sum(k["cost"] for k in window) // len(window)
+        ma_sla = sum(k["sla"] for k in window) // len(window)
+        ma_nps = sum(k["nps"] for k in window) // len(window)
+        ma_repeat = sum(k["repeat"] for k in window) // len(window)
+        with ph_kpi.container():
+            st.markdown("**Optimized Split**")
+            kc1, kc2, kc3, kc4 = st.columns(4)
+            kc1.metric("Avg Cost/Task", f"\u20ac{kpi['cost']}")
+            kc2.metric("SLA %", f"{kpi['sla']}%")
+            kc3.metric("NPS", f"{kpi['nps']}")
+            kc4.metric("Repeat %", f"{kpi['repeat']}%")
+            st.markdown("**Moving Average (3 months)**")
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            mc1.metric("Avg Cost/Task", f"\u20ac{ma_cost}")
+            mc2.metric("SLA %", f"{ma_sla}%")
+            mc3.metric("NPS", f"{ma_nps}")
+            mc4.metric("Repeat %", f"{ma_repeat}%")
+            st.markdown("**Equal Split (1/N per ASP)**")
+            ec1, ec2, ec3, ec4 = st.columns(4)
+            ec1.metric("Avg Cost/Task", f"\u20ac{kpi_eq['cost']}")
+            ec2.metric("SLA %", f"{kpi_eq['sla']}%")
+            ec3.metric("NPS", f"{kpi_eq['nps']}")
+            ec4.metric("Repeat %", f"{kpi_eq['repeat']}%")
+            st.markdown("**Delta (Optimized vs Equal)**")
+            dc1, dc2, dc3, dc4 = st.columns(4)
+            d_cost = kpi['cost'] - kpi_eq['cost']
+            d_sla = kpi['sla'] - kpi_eq['sla']
+            d_nps = kpi['nps'] - kpi_eq['nps']
+            d_repeat = kpi['repeat'] - kpi_eq['repeat']
+            c_cost = "green" if d_cost <= 0 else "red"
+            c_sla = "green" if d_sla >= 0 else "red"
+            c_nps = "green" if d_nps >= 0 else "red"
+            c_repeat = "green" if d_repeat <= 0 else "red"
+            dc1.markdown(f"<span style='color:{c_cost};font-size:1.5rem;font-weight:bold'>{d_cost:+d}\u20ac</span>", unsafe_allow_html=True)
+            dc2.markdown(f"<span style='color:{c_sla};font-size:1.5rem;font-weight:bold'>{d_sla:+d}%</span>", unsafe_allow_html=True)
+            dc3.markdown(f"<span style='color:{c_nps};font-size:1.5rem;font-weight:bold'>{d_nps:+d}</span>", unsafe_allow_html=True)
+            dc4.markdown(f"<span style='color:{c_repeat};font-size:1.5rem;font-weight:bold'>{d_repeat:+d}%</span>", unsafe_allow_html=True)
+            # Cumulated savings
+            cum_savings = sum((monthly_kpis_equal[i]["cost"] - monthly_kpis[i]["cost"]) * total_tasks_pm for i in range(m_idx + 1))
+            sav_color = "green" if cum_savings >= 0 else "red"
+            dc1.markdown(f"<span style='color:{sav_color};font-size:1.1rem'>Cumulated: \u20ac{cum_savings:,}</span>", unsafe_allow_html=True)
 
     if play:
+        ph_journey.empty()  # hide journey text during animation
         for m in range(1, n_months + 1):
             _render(m)
             if m in (6, 18, 25):
@@ -1066,7 +1084,10 @@ def _tab_rebalancing(settings):
             else:
                 time.sleep(0.6)
     elif reset:
-        _render(1)
+        # Hide everything on reset
+        ph_event.empty()
+        ph_bar.empty()
+        ph_kpi.empty()
     else:
         _render(month_slider)
 
