@@ -1028,15 +1028,15 @@ def _tab_rebalancing(settings):
                           margin=dict(l=20, r=20, t=40, b=10), xaxis_title="Share (%)",
                           legend=dict(orientation="h", y=-0.2))
         ph_bar.plotly_chart(fig, use_container_width=True)
-        # KPIs + moving average
+        # KPIs
         kpi = monthly_kpis[m_idx]
         kpi_eq = monthly_kpis_equal[m_idx]
-        # Compute moving average (last 3 months or available)
+        # Moving averages for delta row
         window = monthly_kpis[max(0, m_idx - 2):m_idx + 1]
-        ma_cost = sum(k["cost"] for k in window) // len(window)
         ma_sla = sum(k["sla"] for k in window) // len(window)
         ma_nps = sum(k["nps"] for k in window) // len(window)
         ma_repeat = sum(k["repeat"] for k in window) // len(window)
+        cum_savings = sum((monthly_kpis_equal[i]["cost"] - monthly_kpis[i]["cost"]) * total_tasks_pm for i in range(m_idx + 1))
         with ph_kpi.container():
             st.markdown("**Optimized Split**")
             kc1, kc2, kc3, kc4 = st.columns(4)
@@ -1044,36 +1044,22 @@ def _tab_rebalancing(settings):
             kc2.metric("SLA %", f"{kpi['sla']}%")
             kc3.metric("NPS", f"{kpi['nps']}")
             kc4.metric("Repeat %", f"{kpi['repeat']}%")
-            st.markdown("**Moving Average (3 months)**")
-            mc1, mc2, mc3, mc4 = st.columns(4)
-            mc1.metric("Avg Cost/Task", f"\u20ac{ma_cost}")
-            mc2.metric("SLA %", f"{ma_sla}%")
-            mc3.metric("NPS", f"{ma_nps}")
-            mc4.metric("Repeat %", f"{ma_repeat}%")
             st.markdown("**Equal Split (1/N per ASP)**")
             ec1, ec2, ec3, ec4 = st.columns(4)
             ec1.metric("Avg Cost/Task", f"\u20ac{kpi_eq['cost']}")
             ec2.metric("SLA %", f"{kpi_eq['sla']}%")
             ec3.metric("NPS", f"{kpi_eq['nps']}")
             ec4.metric("Repeat %", f"{kpi_eq['repeat']}%")
-            st.markdown("**Delta (Optimized vs Equal)**")
+            st.markdown("**Delta**")
             dc1, dc2, dc3, dc4 = st.columns(4)
-            d_cost = kpi['cost'] - kpi_eq['cost']
-            d_sla = kpi['sla'] - kpi_eq['sla']
-            d_nps = kpi['nps'] - kpi_eq['nps']
-            d_repeat = kpi['repeat'] - kpi_eq['repeat']
-            c_cost = "green" if d_cost <= 0 else "red"
-            c_sla = "green" if d_sla >= 0 else "red"
-            c_nps = "green" if d_nps >= 0 else "red"
-            c_repeat = "green" if d_repeat <= 0 else "red"
-            dc1.markdown(f"<span style='color:{c_cost};font-size:1.5rem;font-weight:bold'>{d_cost:+d}\u20ac</span>", unsafe_allow_html=True)
-            dc2.markdown(f"<span style='color:{c_sla};font-size:1.5rem;font-weight:bold'>{d_sla:+d}%</span>", unsafe_allow_html=True)
-            dc3.markdown(f"<span style='color:{c_nps};font-size:1.5rem;font-weight:bold'>{d_nps:+d}</span>", unsafe_allow_html=True)
-            dc4.markdown(f"<span style='color:{c_repeat};font-size:1.5rem;font-weight:bold'>{d_repeat:+d}%</span>", unsafe_allow_html=True)
-            # Cumulated savings
-            cum_savings = sum((monthly_kpis_equal[i]["cost"] - monthly_kpis[i]["cost"]) * total_tasks_pm for i in range(m_idx + 1))
             sav_color = "green" if cum_savings >= 0 else "red"
-            dc1.markdown(f"<span style='color:{sav_color};font-size:1.1rem'>Cumulated: \u20ac{cum_savings:,}</span>", unsafe_allow_html=True)
+            c_sla = "green" if ma_sla >= kpi_eq['sla'] else "red"
+            c_nps = "green" if ma_nps >= kpi_eq['nps'] else "red"
+            c_repeat = "green" if ma_repeat <= kpi_eq['repeat'] else "red"
+            dc1.markdown(f"<span style='color:{sav_color};font-size:1.5rem;font-weight:bold'>\u20ac{cum_savings:,}</span><br><small>Cumulated savings</small>", unsafe_allow_html=True)
+            dc2.markdown(f"<span style='color:{c_sla};font-size:1.5rem;font-weight:bold'>{ma_sla}%</span><br><small>MA SLA</small>", unsafe_allow_html=True)
+            dc3.markdown(f"<span style='color:{c_nps};font-size:1.5rem;font-weight:bold'>{ma_nps}</span><br><small>MA NPS</small>", unsafe_allow_html=True)
+            dc4.markdown(f"<span style='color:{c_repeat};font-size:1.5rem;font-weight:bold'>{ma_repeat}%</span><br><small>MA Repeat</small>", unsafe_allow_html=True)
 
     if play:
         ph_journey.empty()  # hide journey text during animation
