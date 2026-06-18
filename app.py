@@ -1375,47 +1375,47 @@ def _tab_engine_view(settings):
 
     st.markdown("""
 <table style="width:100%;border-collapse:collapse;font-size:0.95rem">
-<tr style="background:#2c3e50;color:white">
+<tr>
 <th style="padding:10px;text-align:center;width:40px">#</th>
 <th style="padding:10px">Capability</th>
-<th style="padding:10px;background:#1a5276;color:white">Method in This Demo</th>
-<th style="padding:10px;background:#7d3c98;color:white">Production-Grade Methods</th>
+<th style="padding:10px;color:#5dade2">Method in This Demo</th>
+<th style="padding:10px;color:#af7ac5">Production-Grade Methods</th>
 </tr>
-<tr style="background:#f8f9fa">
+<tr>
 <td style="padding:8px;text-align:center">1️⃣</td>
 <td style="padding:8px"><b>Business Scorecard</b></td>
-<td style="padding:8px;background:#d6eaf8">Weighted scoring (0–100), global normalization, score² allocation</td>
-<td style="padding:8px;background:#e8daef">Multi-Criteria Decision Analysis (MCDA), Technique for Order of Preference by Similarity (TOPSIS), Analytic Hierarchy Process (AHP), Bayesian decision networks</td>
+<td style="padding:8px;color:#85c1e9">Weighted scoring (0–100), global normalization, score² allocation</td>
+<td style="padding:8px;color:#d2b4de">Multi-Criteria Decision Analysis (MCDA), Technique for Order of Preference by Similarity (TOPSIS), Analytic Hierarchy Process (AHP), Bayesian decision networks</td>
 </tr>
 <tr>
 <td style="padding:8px;text-align:center">2️⃣</td>
 <td style="padding:8px"><b>Data Confidence</b></td>
-<td style="padding:8px;background:#d6eaf8">Empirical Bayes shrinkage + winsorization (P5/P95)</td>
-<td style="padding:8px;background:#e8daef">Hierarchical Bayesian models, Gaussian Processes (GP), Multiple Imputation by Chained Equations (MICE)</td>
+<td style="padding:8px;color:#85c1e9">Empirical Bayes shrinkage + winsorization (P5/P95)</td>
+<td style="padding:8px;color:#d2b4de">Hierarchical Bayesian models, Gaussian Processes (GP), Multiple Imputation by Chained Equations (MICE)</td>
 </tr>
-<tr style="background:#f8f9fa">
+<tr>
 <td style="padding:8px;text-align:center">3️⃣</td>
 <td style="padding:8px"><b>Causal Intelligence</b></td>
-<td style="padding:8px;background:#d6eaf8">Task difficulty ratios + SME knowledge deltas</td>
-<td style="padding:8px;background:#e8daef">Directed Acyclic Graphs (DAG), Propensity Score Matching (PSM), Causal Forests, Difference-in-Differences (DiD)</td>
+<td style="padding:8px;color:#85c1e9">Task difficulty ratios + SME knowledge deltas</td>
+<td style="padding:8px;color:#d2b4de">Directed Acyclic Graphs (DAG), Propensity Score Matching (PSM), Causal Forests, Difference-in-Differences (DiD)</td>
 </tr>
 <tr>
 <td style="padding:8px;text-align:center">4️⃣</td>
 <td style="padding:8px"><b>Allocation Engine</b></td>
-<td style="padding:8px;background:#d6eaf8">Score²-proportional + winner bonus + constraint clipping</td>
-<td style="padding:8px;background:#e8daef">Linear Programming (LP), Mixed-Integer Programming (MIP), Robust Optimization (RO)</td>
+<td style="padding:8px;color:#85c1e9">Score²-proportional + winner bonus + constraint clipping</td>
+<td style="padding:8px;color:#d2b4de">Linear Programming (LP), Mixed-Integer Programming (MIP), Robust Optimization (RO)</td>
 </tr>
-<tr style="background:#f8f9fa">
+<tr>
 <td style="padding:8px;text-align:center">5️⃣</td>
 <td style="padding:8px"><b>Dynamic Rebalancing</b></td>
-<td style="padding:8px;background:#d6eaf8">Monthly score simulation + 5pp movement cap</td>
-<td style="padding:8px;background:#e8daef">Contextual Bandits (CB), Reinforcement Learning (RL), Rolling Horizon Optimization (RHO)</td>
+<td style="padding:8px;color:#85c1e9">Monthly score simulation + 5pp movement cap</td>
+<td style="padding:8px;color:#d2b4de">Contextual Bandits (CB), Reinforcement Learning (RL), Rolling Horizon Optimization (RHO)</td>
 </tr>
 <tr>
 <td style="padding:8px;text-align:center">6️⃣</td>
 <td style="padding:8px"><b>Scenario Simulation</b></td>
-<td style="padding:8px;background:#d6eaf8">Priority/constraint override + re-optimization</td>
-<td style="padding:8px;background:#e8daef">Monte Carlo Simulation (MCS), Stochastic Programming (SP), Digital Twins (DT)</td>
+<td style="padding:8px;color:#85c1e9">Priority/constraint override + re-optimization</td>
+<td style="padding:8px;color:#d2b4de">Monte Carlo Simulation (MCS), Stochastic Programming (SP), Digital Twins (DT)</td>
 </tr>
 </table>
 """, unsafe_allow_html=True)
