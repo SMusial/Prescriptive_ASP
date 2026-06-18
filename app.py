@@ -1371,40 +1371,18 @@ def _scenario_bar(pct: dict, title: str):
 
 def _tab_engine_view(settings):
     st.header("Engine View")
-    st.caption("Hidden by default. For technical audience only.")
+    st.caption("Technical reference for analytics teams.")
 
-    import pandas as pd
-
-    st.subheader("Capabilities & Methods")
-    methods_df = pd.DataFrame([
-        {"Capability": "Business Scorecard", "Demo Method": "Weighted multi-criteria scoring (normalized 0–100, score² proportional allocation)", "Production Methods": "MCDA, TOPSIS, AHP, Bayesian decision networks, ensemble scoring"},
-        {"Capability": "Data Confidence Layer", "Demo Method": "Bayesian shrinkage (empirical Bayes) + winsorization (5th/95th percentile)", "Production Methods": "Hierarchical Bayesian models, Gaussian processes, multiple imputation, probabilistic programming"},
-        {"Capability": "Causal Intelligence", "Demo Method": "Complexity/travel/weather/access ratio adjustment + SME delta scoring", "Production Methods": "Causal graphs (DAGs), propensity score matching, doubly robust estimation, causal forests, DiD"},
-        {"Capability": "Allocation Engine", "Demo Method": "Score²-proportional + winner bonus + greedy constrained reconciliation", "Production Methods": "Linear/mixed-integer programming (PuLP/Gurobi), robust optimization, stochastic programming"},
-        {"Capability": "Dynamic Rebalancing", "Demo Method": "Monthly score evolution + movement-capped reallocation (5pp/month)", "Production Methods": "Contextual bandits, reinforcement learning, Bayesian updating, rolling horizon optimization"},
-        {"Capability": "Scenario Simulation", "Demo Method": "Weight/constraint override + re-optimization", "Production Methods": "Monte Carlo simulation, stochastic scenarios, digital twins, agentic orchestration"},
-    ])
-    st.dataframe(methods_df, use_container_width=True, hide_index=True)
-
-    st.subheader("Engine Settings")
-    items = {
-        "Data confidence strength": settings["smoothing"]["strength"],
-        "Recent performance weight": f"{settings['rebalancing']['recent_weight']*100:.0f}%",
-        "Historical baseline weight": f"{settings['rebalancing']['historical_weight']*100:.0f}%",
-        "Min confidence threshold": settings["smoothing"]["min_confidence_threshold"],
-        "Max ASP share": f"{settings['constraints']['max_share']*100:.0f}%",
-        "Min eligible ASP share": f"{settings['constraints']['min_share']*100:.0f}%",
-        "Climb safety threshold": "100% (mandatory gate)",
-        "Budget limit": f"\u20ac{settings['constraints']['budget']:,}",
-        "Weather impact": "Active" if settings["constraints"]["weather_impact"] else "Inactive",
-        "SME adjustment layer": "Active" if settings["constraints"]["sme_adjustments"] else "Inactive",
-    }
-    for k, v in items.items():
-        st.write(f"**{k}:** {v}")
-
-    if "df" in st.session_state:
-        with st.expander("Raw Generated Data (sample)"):
-            st.dataframe(st.session_state["df"].head(50), use_container_width=True)
+    st.markdown("""
+| | **Capability** | **Method in This Demo** | **Production-Grade Methods** |
+|:---:|:---|:---|:---|
+| 1️⃣ | **Business Scorecard** | Weighted scoring (0–100), global normalization, score² allocation | MCDA, TOPSIS, AHP, Bayesian decision networks |
+| 2️⃣ | **Data Confidence** | Empirical Bayes shrinkage + winsorization (P5/P95) | Hierarchical Bayesian models, Gaussian processes, multiple imputation |
+| 3️⃣ | **Causal Intelligence** | Task difficulty ratios + SME knowledge deltas | Causal DAGs, propensity score matching, causal forests, DiD |
+| 4️⃣ | **Allocation Engine** | Score²-proportional + winner bonus + constraint clipping | Linear programming (PuLP/Gurobi), mixed-integer, robust optimization |
+| 5️⃣ | **Dynamic Rebalancing** | Monthly score simulation + 5pp movement cap | Contextual bandits, reinforcement learning, rolling optimization |
+| 6️⃣ | **Scenario Simulation** | Priority/constraint override + re-optimization | Monte Carlo, stochastic programming, digital twins |
+""")
 
     st.divider()
     st.markdown('> *"Today we often report what happened. With prescriptive analytics, we recommend what to do next."*')
