@@ -1209,7 +1209,7 @@ def _tab_rebalancing(settings):
 
 def _tab_scenarios(settings):
     st.header("What-If Scenarios")
-    st.markdown('> *"Test how the recommendation changes under different business pressures."*')
+    st.markdown('> *"How resilient is our allocation when cost, demand, quality or technology change?"*')
 
     if "scored" not in st.session_state or "metrics" not in st.session_state:
         st.warning("Complete previous tabs first.")
@@ -1218,137 +1218,141 @@ def _tab_scenarios(settings):
     import plotly.graph_objects as go
 
     demands = st.session_state.get("demands", {"urban": 1200, "mountain": 420, "climb": 160})
-
-    # Scenario definitions
-    scenarios_info = {
-        "cost_pressure": {
-            "icon": "💰", "title": "Cost Pressure",
-            "subtitle": "Budget −15%, cost priority doubles",
-            "weights": {"cost": 40, "safety": 25, "sla": 20, "nps": 10, "repeat_visits": 5},
-            "budget_factor": 0.85,
-            "constraint_mods": {},
-            "message": "Cost can be reduced, but not by violating critical safety, certification or capacity constraints.",
-            "risks": "⚠️ SLA may drop for profiles where cheap ASPs have weaker delivery | NPS likely decreases | Repeat visits may increase",
-            "presenter": "The system optimizes cost, but it does not trade away safety.",
-        },
-        "customer_crisis": {
-            "icon": "😡", "title": "Customer Crisis",
-            "subtitle": "NPS crashed — customer experience is #1 priority",
-            "weights": {"cost": 5, "safety": 20, "sla": 20, "nps": 45, "repeat_visits": 10},
-            "budget_factor": 1.1,
-            "constraint_mods": {},
-            "message": "When customers revolt, the system shifts volume to ASPs that deliver the best experience — even at higher cost.",
-            "risks": "⚠️ Cost per task increases significantly | Budget pressure rises | Cheaper ASPs lose volume despite being operationally capable",
-            "presenter": "Customer trust is rebuilt by actions, not promises. The engine acts on NPS signals immediately.",
-        },
-        "bad_weather": {
-            "icon": "⛈️", "title": "Severe Weather",
-            "subtitle": "Storm hits Mountain & Climb — capacity −25%/−20%",
-            "weights": {"cost": 20, "safety": 35, "sla": 25, "nps": 10, "repeat_visits": 10},
-            "budget_factor": 1.0,
-            "constraint_mods": {"weather_mountain_climb": True},
-            "message": "The system anticipates operational risk and adjusts allocation before SLA breaches occur.",
-            "risks": "⚠️ Mountain & Climb SLA at risk due to reduced capacity | Infeasibility if demand exceeds remaining capacity | Some tasks may need rescheduling",
-            "presenter": "The engine does not wait for SLA failure. It anticipates risk and protects delivery.",
-        },
-        "asp_exit": {
-            "icon": "🚪", "title": "ASP Market Exit",
-            "subtitle": "CityConnect and AlpinGmbH leave the market",
-            "weights": {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10},
-            "budget_factor": 1.0,
-            "constraint_mods": {"block_urban1_mountain3": True},
-            "message": "When ASPs exit, the system immediately redistributes volume while respecting all remaining constraints.",
-            "risks": "⚠️ Urban loses cheapest ASP → cost rises | Mountain loses backup capacity → concentration risk | Remaining ASPs may hit capacity limits",
-            "presenter": "A good prescriptive system tells you both what to do and when the model can no longer meet demand.",
-        },
-    }
-
-    # Compute baseline (current recommendation)
     scored_base = st.session_state["scored"]
-    sme_obs = get_active_observations()
-    sme_effects_base = get_engine_effects(sme_obs)
     cs = st.session_state.get("constraint_settings", {})
     budget_base = cs.get("budget", st.session_state.get("budget", settings["constraints"]["budget"]))
 
+    # Baseline allocation
+    sme_obs = get_active_observations()
+    sme_effects = get_engine_effects(sme_obs)
     settings_base = settings.copy()
     settings_base["constraints"] = {**settings["constraints"], "budget": budget_base,
                                      "max_share": cs.get("max_share", settings["constraints"]["max_share"])}
-    constraints_base = build_constraints(settings_base, sme_effects_base, scored_base)
+    constraints_base = build_constraints(settings_base, sme_effects, scored_base)
     constraints_base["planning_weeks"] = st.session_state.get("planning_weeks", 4)
     result_base = optimize_allocation(scored_base, constraints_base, demands)
     pct_base = allocation_to_pct(result_base["allocations"], demands)
 
-    # Scenario buttons
-    st.subheader("Select Scenario")
+    # Scenario definitions
+    scenarios = {
+        "budget": {"icon": "💰", "title": "Budget Reduction", "subtitle": "Can we reduce cost without breaking performance?",
+                   "levels": [("Mild −5%", 0.95), ("Expected −15%", 0.85), ("Severe −25%", 0.75)]},
+        "demand": {"icon": "📈", "title": "Demand Increase", "subtitle": "How much more can our ASP ecosystem absorb?",
+                   "levels": [("Mild +10%", 1.10), ("Expected +20%", 1.20), ("Severe +40%", 1.40)]},
+        "repeat": {"icon": "🔄", "title": "Repeat Visit Penalty", "subtitle": "What if poor quality becomes contractually expensive?",
+                   "levels": [("Low penalty", 20), ("Medium penalty", 40), ("High penalty", 60)]},
+        "5g": {"icon": "📡", "title": "4G → 5G Network Swap", "subtitle": "How does technology transformation change allocation?",
+               "levels": [("Conservative rollout", 0.2), ("Expected rollout", 0.5), ("Accelerated rollout", 0.8)]},
+    }
+
+    # Scenario selector
     cols = st.columns(4)
     selected = None
-    for i, (key, info) in enumerate(scenarios_info.items()):
-        if cols[i].button(f"{info['icon']} {info['title']}", key=f"sc_{key}", use_container_width=True):
+    for i, (key, sc) in enumerate(scenarios.items()):
+        if cols[i].button(f"{sc['icon']} {sc['title']}", key=f"sc_{key}", use_container_width=True):
             selected = key
 
     if not selected:
-        st.info("👆 Select a scenario to see how the recommendation changes.")
+        st.info("👆 Select a scenario to explore allocation resilience.")
+        st.markdown("""
+| Scenario | Core Question | Value |
+|---|---|---|
+| 💰 Budget Reduction | Can we reduce cost safely? | Finds cost-risk breaking point |
+| 📈 Demand Increase | Can ASPs absorb more work? | Identifies capacity bottlenecks |
+| 🔄 Repeat Visit Penalty | What if poor quality becomes expensive? | Shifts to first-time-fix |
+| 📡 4G → 5G Swap | How does transformation change allocation? | Strategic readiness planning |
+""")
         return
 
-    sc = scenarios_info[selected]
+    sc = scenarios[selected]
     st.markdown(f"### {sc['icon']} {sc['title']}")
     st.caption(sc["subtitle"])
 
-    # Compute scenario result
-    scored_sc = compute_scores(st.session_state["metrics"], sc["weights"])
-    sme_effects_sc = get_engine_effects(sme_obs)
+    # Run scenario at each uncertainty level
+    results_levels = []
+    for label, factor in sc["levels"]:
+        scored_sc = compute_scores(st.session_state["metrics"],
+                                   st.session_state.get("weights", {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10}))
+        settings_sc = settings.copy()
+        demands_sc = dict(demands)
+        constraints_sc_settings = {**settings["constraints"], "max_share": cs.get("max_share", settings["constraints"]["max_share"])}
 
-    settings_sc = settings.copy()
-    sc_budget = int(budget_base * sc["budget_factor"])
-    settings_sc["constraints"] = {**settings["constraints"], "budget": sc_budget,
-                                   "max_share": cs.get("max_share", settings["constraints"]["max_share"])}
+        if selected == "budget":
+            constraints_sc_settings["budget"] = int(budget_base * factor)
+        elif selected == "demand":
+            demands_sc = {p: int(v * factor) for p, v in demands.items()}
+        elif selected == "repeat":
+            # Increase repeat_visits weight
+            w = dict(st.session_state.get("weights", {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10}))
+            w["repeat_visits"] = factor
+            w_total = sum(w.values())
+            w = {k: v / w_total * 100 for k, v in w.items()}
+            scored_sc = compute_scores(st.session_state["metrics"], w)
+        elif selected == "5g":
+            # 5G readiness: penalize ASPs without "5G skills" (first ASP per profile)
+            for _, row in scored_sc.iterrows():
+                if row["asp"] in ["CityConnect", "AlpineReach", "SkyClimb"]:
+                    scored_sc.loc[scored_sc["asp"] == row["asp"], "business_score"] *= (1 - factor * 0.4)
 
-    constraints_sc = build_constraints(settings_sc, sme_effects_sc, scored_sc)
-    constraints_sc["planning_weeks"] = st.session_state.get("planning_weeks", 4)
+        settings_sc["constraints"] = constraints_sc_settings
+        c_sc = build_constraints(settings_sc, sme_effects, scored_sc)
+        c_sc["planning_weeks"] = st.session_state.get("planning_weeks", 4)
+        r_sc = optimize_allocation(scored_sc, c_sc, demands_sc)
+        pct_sc = allocation_to_pct(r_sc["allocations"], demands_sc)
+        results_levels.append({"label": label, "result": r_sc, "pct": pct_sc, "demands": demands_sc})
 
-    # Apply scenario-specific constraint modifications
-    if sc["constraint_mods"].get("weather_mountain_climb"):
-        constraints_sc["weather_reduction_by_profile"] = {"mountain": 0.25, "urban": 0, "climb": 0.20}
-    if sc["constraint_mods"].get("block_urban1_mountain3"):
-        # Zero out blocked ASPs by setting their capacity to 0
-        constraints_sc["capacity"]["cityconnect"] = 0
-        constraints_sc["capacity"]["alpingmbh"] = 0
+    # Display: 3-level comparison
+    st.subheader("Uncertainty Levels")
+    level_cols = st.columns(3)
+    for i, rl in enumerate(results_levels):
+        with level_cols[i]:
+            feasible_icon = "✅" if rl["result"]["feasible"] else "⚠️"
+            st.markdown(f"**{rl['label']}** {feasible_icon}")
+            st.plotly_chart(_scenario_bar(rl["pct"], rl["label"]), use_container_width=True)
+            st.metric("Cost", f"€{rl['result']['total_cost']:,.0f}")
+            if not rl["result"]["feasible"]:
+                for r in rl["result"]["infeasible_reasons"]:
+                    st.caption(f"❌ {r}")
 
-    result_sc = optimize_allocation(scored_sc, constraints_sc, demands)
-    pct_sc = allocation_to_pct(result_sc["allocations"], demands)
+    # KPI impact comparison
+    st.subheader("KPI Impact Across Levels")
+    kpi_data = []
+    for rl in results_levels:
+        kpis = _compute_weighted_kpis(scored_base, rl["result"]["allocations"], rl["demands"])
+        kpis["Level"] = rl["label"]
+        kpis["Feasible"] = "✅" if rl["result"]["feasible"] else "❌"
+        kpi_data.append(kpis)
+    import pandas as pd
+    kpi_df = pd.DataFrame(kpi_data)[["Level", "Feasible", "Avg Cost/Task", "SLA %", "NPS", "Repeat %"]]
+    st.dataframe(kpi_df, hide_index=True, use_container_width=True)
 
-    # Display: Before vs After
-    col_before, col_after = st.columns(2)
-    with col_before:
-        st.markdown("**Current Allocation**")
-        st.plotly_chart(_scenario_bar(pct_base, "Current"), use_container_width=True)
-    with col_after:
-        st.markdown(f"**After: {sc['title']}**")
-        st.plotly_chart(_scenario_bar(pct_sc, sc["title"]), use_container_width=True)
+    # Recommended actions
+    st.subheader("Recommended Actions")
+    actions = {
+        "budget": ["Shift to lower-cost ASPs where SLA/safety permit",
+                   "Protect Climb safety gates — never compromise",
+                   "Cap cheap ASPs if quality drops at high volume",
+                   "If infeasible: increase budget, reduce scope, or reschedule non-critical work"],
+        "demand": ["Reallocate to ASPs with spare capacity",
+                   "Prioritize high-SLA ASPs for urgent work",
+                   "Add temporary capacity if demand exceeds feasible limits",
+                   "Trigger training/certification if Climb becomes bottleneck"],
+        "repeat": ["Increase repeat-visit weight in scorecard",
+                   "Allocate more to ASPs with strong first-time-fix rate",
+                   "Apply stronger penalty for Climb repeat visits (safety + reputation)",
+                   "Root-cause analysis: distinguish ASP quality vs. task complexity"],
+        "5g": ["Re-score ASPs using 5G readiness criteria",
+               "Add 5G certification as eligibility constraint",
+               "Gradual transition plan — not a one-time switch",
+               "Controlled pilots for newly 5G-certified ASPs",
+               "Track whether self-recovery reduces visits or changes visit type"],
+    }
+    for action in actions[selected]:
+        st.write(f"→ {action}")
 
-    # Achievability assessment
+    # Closing
     st.divider()
-    if result_sc["feasible"]:
-        st.success(f"✅ **Scenario achievable.** {sc['message']}")
-    else:
-        st.warning(f"⚠️ **Partially achievable.** {sc['message']}")
-        st.error("Violations:")
-        for r in result_sc["infeasible_reasons"]:
-            st.write(f"- {r}")
-
-    st.markdown(f"{sc['risks']}")
-
-    # Reason codes
-    with st.expander("Detailed Reason Codes"):
-        for profile in ["urban", "mountain", "climb"]:
-            reasons = generate_reason_codes(profile, result_sc["allocations"][profile], scored_sc, constraints_sc)
-            st.markdown(f"**{profile.title()}**")
-            for asp, codes in reasons.items():
-                alloc = result_sc["allocations"][profile][asp]
-                st.write(f"  {asp} ({alloc} tasks): " + "; ".join(codes))
-
-    st.divider()
-    st.markdown(f'> *"{sc["presenter"]}"*')
+    st.markdown('> *"The goal is not only the best allocation for today — it\'s an allocation strategy that remains safe, feasible and valuable under changing conditions."*')
 
 
 def _scenario_bar(pct: dict, title: str):
@@ -1382,37 +1386,37 @@ def _tab_engine_view(settings):
 <th style="padding:10px;color:#af7ac5">Production-Grade Methods</th>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center">📊</td>
+<td style="padding:8px;text-align:center;font-size:2.5rem">📊</td>
 <td style="padding:8px"><b>Business Scorecard</b></td>
 <td style="padding:8px;color:#85c1e9">Weighted scoring (0–100), global normalization, score² allocation</td>
 <td style="padding:8px;color:#d2b4de">Multi-Criteria Decision Analysis (MCDA), Technique for Order of Preference by Similarity (TOPSIS), Analytic Hierarchy Process (AHP), Bayesian decision networks</td>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center">🧹</td>
+<td style="padding:8px;text-align:center;font-size:2.5rem">🧹</td>
 <td style="padding:8px"><b>Data Confidence</b></td>
 <td style="padding:8px;color:#85c1e9">Empirical Bayes shrinkage + winsorization (P5/P95)</td>
 <td style="padding:8px;color:#d2b4de">Hierarchical Bayesian models, Gaussian Processes (GP), Multiple Imputation by Chained Equations (MICE)</td>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center">🧠</td>
+<td style="padding:8px;text-align:center;font-size:2.5rem">🧠</td>
 <td style="padding:8px"><b>Causal Intelligence</b></td>
 <td style="padding:8px;color:#85c1e9">Task difficulty ratios + SME knowledge deltas</td>
 <td style="padding:8px;color:#d2b4de">Directed Acyclic Graphs (DAG), Propensity Score Matching (PSM), Causal Forests, Difference-in-Differences (DiD)</td>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center">🎯</td>
+<td style="padding:8px;text-align:center;font-size:2.5rem">🎯</td>
 <td style="padding:8px"><b>Allocation Engine</b></td>
 <td style="padding:8px;color:#85c1e9">Score²-proportional + winner bonus + constraint clipping</td>
 <td style="padding:8px;color:#d2b4de">Linear Programming (LP), Mixed-Integer Programming (MIP), Robust Optimization (RO)</td>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center">⏱️</td>
+<td style="padding:8px;text-align:center;font-size:2.5rem">⏱️</td>
 <td style="padding:8px"><b>Dynamic Rebalancing</b></td>
 <td style="padding:8px;color:#85c1e9">Monthly score simulation + 5pp movement cap</td>
 <td style="padding:8px;color:#d2b4de">Contextual Bandits (CB), Reinforcement Learning (RL), Rolling Horizon Optimization (RHO)</td>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center">🧪</td>
+<td style="padding:8px;text-align:center;font-size:2.5rem">🧪</td>
 <td style="padding:8px"><b>Scenario Simulation</b></td>
 <td style="padding:8px;color:#85c1e9">Priority/constraint override + re-optimization</td>
 <td style="padding:8px;color:#d2b4de">Monte Carlo Simulation (MCS), Stochastic Programming (SP), Digital Twins (DT)</td>
