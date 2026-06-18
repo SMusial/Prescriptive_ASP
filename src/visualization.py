@@ -7,24 +7,38 @@ import pandas as pd
 def allocation_bar_chart(allocations_pct: dict, allocations_abs: dict = None) -> go.Figure:
     """Stacked horizontal bar chart with ASP names and task counts on bars."""
     fig = go.Figure()
-    profiles = ["urban", "mountain", "climb"]  # fixed order: Urban top, Climb bottom
-    colors = {"1": "#90EE90", "2": "#636EFA", "3": "#EF553B"}
+    profiles = ["urban", "mountain", "climb"]
+    colors_list = ["#90EE90", "#636EFA", "#EF553B", "#FFA500", "#9467BD"]
 
-    for asp_num in ["1", "2", "3"]:
-        x_vals = []
-        y_vals = []
-        text_vals = []
-        for profile in reversed(profiles):  # reversed so Urban is on top in horizontal bar
+    # Collect all unique ASP names across profiles, assign color by position
+    all_asps_ordered = []
+    for profile in profiles:
+        if profile in allocations_pct:
+            for asp in allocations_pct[profile]:
+                if asp not in all_asps_ordered:
+                    all_asps_ordered.append(asp)
+
+    # Group by position index within profile
+    max_asps = max(len(allocations_pct.get(p, {})) for p in profiles) if allocations_pct else 3
+    for idx in range(max_asps):
+        x_vals, y_vals, text_vals = [], [], []
+        asp_name_for_legend = None
+        for profile in reversed(profiles):
             if profile not in allocations_pct:
                 continue
-            for asp, pct in allocations_pct[profile].items():
-                if asp_num in asp:
-                    x_vals.append(pct)
-                    y_vals.append(profile.title())
-                    abs_val = allocations_abs.get(profile, {}).get(asp, "") if allocations_abs else ""
-                    text_vals.append(f"{asp.split(' ')[-2]} {asp.split(' ')[-1]}<br>{abs_val} ({pct:.0f}%)" if abs_val else f"{pct:.0f}%")
-        fig.add_trace(go.Bar(name=f"ASP {asp_num}", x=x_vals, y=y_vals, orientation="h",
-                             marker_color=colors[asp_num], text=text_vals, textposition="inside",
+            asps = list(allocations_pct[profile].keys())
+            if idx < len(asps):
+                asp = asps[idx]
+                pct = allocations_pct[profile][asp]
+                x_vals.append(pct)
+                y_vals.append(profile.title())
+                abs_val = allocations_abs.get(profile, {}).get(asp, "") if allocations_abs else ""
+                text_vals.append(f"{asp}<br>{abs_val} ({pct:.0f}%)" if abs_val else f"{asp} {pct:.0f}%")
+                if not asp_name_for_legend:
+                    asp_name_for_legend = f"Position {idx+1}"
+        color = colors_list[idx % len(colors_list)]
+        fig.add_trace(go.Bar(name=asp_name_for_legend or f"ASP {idx+1}", x=x_vals, y=y_vals, orientation="h",
+                             marker_color=color, text=text_vals, textposition="inside",
                              textfont=dict(size=11, color="black")))
 
     fig.update_layout(barmode="stack", height=250, margin=dict(l=20, r=20, t=20, b=20),
@@ -87,14 +101,9 @@ def radar_chart(scored_df: pd.DataFrame, profile: str) -> go.Figure:
     pdf = scored_df[scored_df["profile"] == profile].sort_values("asp")
     categories = ["Cost", "Safety", "SLA", "NPS", "Repeat Visits"]
     fig = go.Figure()
-    for _, row in pdf.iterrows():
-        # ASP 1 = light green, ASP 2 = blue, ASP 3 = red
-        if "1" in row["asp"]:
-            color = "#90EE90"
-        elif "2" in row["asp"]:
-            color = "#636EFA"
-        else:
-            color = "#EF553B"
+    colors_list = ["#90EE90", "#636EFA", "#EF553B"]
+    for i, (_, row) in enumerate(pdf.iterrows()):
+        color = colors_list[i % 3]
         values = [row["cost_score"], row["safety_score_norm"], row["sla_score"],
                   row["nps_score_norm"], row["repeat_score"]]
         fig.add_trace(go.Scatterpolar(r=values + [values[0]], theta=categories + [categories[0]],

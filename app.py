@@ -1048,19 +1048,15 @@ def _tab_rebalancing(settings):
         # Allocation bar first
         snap = monthly_allocs[m_idx]
         fig = go.Figure()
-        color_map = {"1": "#90EE90", "2": "#636EFA", "3": "#EF553B", "4": "#FFA500", "5": "#9467BD"}
-        all_nums = sorted(set(asp[-1] for p in snap.values() for asp in p.keys()))
-        for asp_num in all_nums:
-            x_vals, y_vals, text_vals = [], [], []
-            for profile in reversed(profiles):
-                for asp, pct in snap[profile].items():
-                    if asp[-1] == asp_num:
-                        x_vals.append(pct)
-                        y_vals.append(profile.title())
-                        text_vals.append(f"ASP {asp_num}: {pct:.0f}%")
-            fig.add_trace(go.Bar(name=f"ASP {asp_num}", x=x_vals, y=y_vals, orientation="h",
-                                 marker_color=color_map.get(asp_num, "#888"), text=text_vals,
-                                 textposition="inside", textfont=dict(color="black")))
+        colors_list = ["#90EE90", "#636EFA", "#EF553B", "#FFA500", "#9467BD"]
+        for profile in reversed(profiles):
+            asps_list = list(snap[profile].keys())
+            for idx, asp in enumerate(asps_list):
+                pct = snap[profile][asp]
+                fig.add_trace(go.Bar(name=asp, x=[pct], y=[profile.title()], orientation="h",
+                                     marker_color=colors_list[idx % len(colors_list)],
+                                     text=[f"{asp}: {pct:.0f}%"], textposition="inside",
+                                     textfont=dict(color="black"), showlegend=(profile == "urban")))
         fig.update_layout(barmode="stack", height=220, title=f"Month {m} \u2014 Recommended Task Split",
                           margin=dict(l=20, r=20, t=40, b=10), xaxis_title="Share (%)",
                           legend=dict(orientation="h", y=-0.2))
@@ -1120,7 +1116,7 @@ def _tab_rebalancing(settings):
         profile_view = st.selectbox("Profile", ["Urban", "Mountain", "Climb"], key="rebal_profile")
         pkey = profile_view.lower()
         month_labels = [f"M{m}" for m in range(1, n_months + 1)]
-        color_map = {"1": "#90EE90", "2": "#636EFA", "3": "#EF553B", "4": "#FFA500", "5": "#9467BD"}
+        colors_list = ["#90EE90", "#636EFA", "#EF553B", "#FFA500", "#9467BD"]
 
         # Collect all ASPs for this profile
         all_asps = set()
@@ -1163,14 +1159,13 @@ def _tab_rebalancing(settings):
             ("alloc", "Allocation Share %", [0, 75]),
         ]:
             fig = go.Figure()
-            for asp in all_asps:
-                num = asp[-1]
+            for idx, asp in enumerate(all_asps):
                 vals = asp_kpis[asp][kpi_name]
                 valid = [(i, v) for i, v in enumerate(vals) if v is not None]
                 if valid:
                     fig.add_trace(go.Scatter(x=[month_labels[i] for i, _ in valid],
                                              y=[v for _, v in valid], name=asp,
-                                             line=dict(color=color_map.get(num, "#888"))))
+                                             line=dict(color=colors_list[idx % len(colors_list)])))
             layout = {"height": 250, "title": title, "margin": dict(l=20, r=20, t=40, b=20)}
             if yrange:
                 layout["yaxis_range"] = yrange
@@ -1338,18 +1333,15 @@ def _scenario_bar(pct: dict, title: str):
     """Small allocation bar for scenario comparison."""
     import plotly.graph_objects as go
     fig = go.Figure()
-    colors = {"1": "#90EE90", "2": "#636EFA", "3": "#EF553B"}
-    for asp_num in ["1", "2", "3"]:
-        x_vals, y_vals, text_vals = [], [], []
-        for profile in reversed(["urban", "mountain", "climb"]):
-            for asp, p in pct.get(profile, {}).items():
-                if asp[-1] == asp_num:
-                    x_vals.append(p)
-                    y_vals.append(profile.title())
-                    text_vals.append(f"{p:.0f}%")
-        fig.add_trace(go.Bar(name=f"ASP {asp_num}", x=x_vals, y=y_vals, orientation="h",
-                             marker_color=colors[asp_num], text=text_vals, textposition="inside",
-                             textfont=dict(color="black")))
+    colors_list = ["#90EE90", "#636EFA", "#EF553B"]
+    for profile in reversed(["urban", "mountain", "climb"]):
+        asps = list(pct.get(profile, {}).keys())
+        for idx, asp in enumerate(asps):
+            p = pct[profile][asp]
+            fig.add_trace(go.Bar(name=asp, x=[p], y=[profile.title()], orientation="h",
+                                 marker_color=colors_list[idx % len(colors_list)],
+                                 text=[f"{p:.0f}%"], textposition="inside",
+                                 textfont=dict(color="black"), showlegend=(profile == "urban")))
     fig.update_layout(barmode="stack", height=180, margin=dict(l=10, r=10, t=10, b=10),
                       showlegend=False, xaxis_title="Share (%)")
     return fig

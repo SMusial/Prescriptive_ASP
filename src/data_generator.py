@@ -136,11 +136,16 @@ def generate_workforce(seed: int = 42) -> dict:
         "climb": (50, 35, 15),     # mostly seniors for safety
     }
 
+    # Map ASP name to profile
+    asp_to_profile = {}
+    for p, cfg in PROFILES.items():
+        for a in cfg["asps"]:
+            asp_to_profile[a] = p
+
     workforce = {}
     for asp in ASP_TEMPLATES:
-        profile = asp.split(" ")[0].lower()
+        profile = asp_to_profile.get(asp, "urban")
         base_s, base_r, base_j = profile_ratios[profile]
-        # Add per-ASP variance
         s = max(5, int(base_s + rng.integers(-8, 9)))
         j = max(5, int(base_j + rng.integers(-5, 6)))
         r = 100 - s - j
