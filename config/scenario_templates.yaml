@@ -24,7 +24,7 @@ bad_mountain_weather:
     mountain_capacity_reduction: 0.20
 
 climb_certification_issue:
-  description: "Climb ASP 2 loses certification"
+  description: "TowerPro loses certification"
   weight_overrides: {}
   constraint_overrides:
     climb_asp_2_certified: false

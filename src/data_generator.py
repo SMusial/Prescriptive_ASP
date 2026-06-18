@@ -4,22 +4,22 @@ import pandas as pd
 
 
 PROFILES = {
-    "urban": {"demand": 1200, "asps": ["Urban ASP 1", "Urban ASP 2", "Urban ASP 3"]},
-    "mountain": {"demand": 420, "asps": ["Mountain ASP 1", "Mountain ASP 2", "Mountain ASP 3"]},
-    "climb": {"demand": 160, "asps": ["Climb ASP 1", "Climb ASP 2", "Climb ASP 3"]},
+    "urban": {"demand": 1200, "asps": ["CityConnect", "UrbanLink", "StreetNet"]},
+    "mountain": {"demand": 420, "asps": ["AlpineReach", "SummitField", "AlpinGmbH"]},
+    "climb": {"demand": 160, "asps": ["SkyClimb", "TowerPro", "VerticalWorks"]},
 }
 
 # ASP characteristic templates: (cost_mean, sla_rate, nps_mean, repeat_rate, safety_score, complexity_bias, emergency_share)
 ASP_TEMPLATES = {
-    "Urban ASP 1": (75, 0.86, -10, 0.10, 80, 0.35, 0.08),
-    "Urban ASP 2": (125, 0.95, 35, 0.04, 88, 0.50, 0.12),
-    "Urban ASP 3": (100, 0.82, -15, 0.13, 76, 0.70, 0.06),
-    "Mountain ASP 1": (120, 0.87, 35, 0.06, 75, 0.85, 0.45),
-    "Mountain ASP 2": (100, 0.93, 5, 0.04, 90, 0.35, 0.08),
-    "Mountain ASP 3": (140, 0.84, -10, 0.12, 82, 0.50, 0.18),
-    "Climb ASP 1": (130, 0.78, -5, 0.14, 70, 0.75, 0.20),
-    "Climb ASP 2": (170, 0.91, 20, 0.05, 93, 0.40, 0.08),
-    "Climb ASP 3": (200, 0.93, 25, 0.03, 97, 0.50, 0.06),
+    "CityConnect": (75, 0.86, -10, 0.10, 80, 0.35, 0.08),
+    "UrbanLink": (125, 0.95, 35, 0.04, 88, 0.50, 0.12),
+    "StreetNet": (100, 0.82, -15, 0.13, 76, 0.70, 0.06),
+    "AlpineReach": (120, 0.87, 35, 0.06, 75, 0.85, 0.45),
+    "SummitField": (100, 0.93, 5, 0.04, 90, 0.35, 0.08),
+    "AlpinGmbH": (140, 0.84, -10, 0.12, 82, 0.50, 0.18),
+    "SkyClimb": (130, 0.78, -5, 0.14, 70, 0.75, 0.20),
+    "TowerPro": (170, 0.91, 20, 0.05, 93, 0.40, 0.08),
+    "VerticalWorks": (200, 0.93, 25, 0.03, 97, 0.50, 0.06),
 }
 
 

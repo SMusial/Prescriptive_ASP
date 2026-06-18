@@ -542,9 +542,9 @@ def _tab_constraints(settings):
         wf = cs.get("weather_forecast", weather_forecast)
         cap_cfg = settings.get("capacity", {})
         profiles_display = {
-            "Urban": {"demand": demands.get("urban", 1200), "cap_keys": ["urban_asp_1", "urban_asp_2", "urban_asp_3"], "profile_key": "urban"},
-            "Mountain": {"demand": demands.get("mountain", 420), "cap_keys": ["mountain_asp_1", "mountain_asp_2", "mountain_asp_3"], "profile_key": "mountain"},
-            "Climb": {"demand": demands.get("climb", 160), "cap_keys": ["climb_asp_1", "climb_asp_2", "climb_asp_3"], "profile_key": "climb"},
+            "Urban": {"demand": demands.get("urban", 1200), "cap_keys": ["cityconnect", "urbanlink", "streetnet"], "profile_key": "urban"},
+            "Mountain": {"demand": demands.get("mountain", 420), "cap_keys": ["alpinereach", "summitfield", "alpingmbh"], "profile_key": "mountain"},
+            "Climb": {"demand": demands.get("climb", 160), "cap_keys": ["skyclimb", "towerpro", "verticalworks"], "profile_key": "climb"},
         }
 
         weather_reasons = {
@@ -809,9 +809,18 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
         trends[f"{p} ASP 4"] = sim_rng.uniform(0.3, 0.6)
         trends[f"{p} ASP 5"] = sim_rng.uniform(0.2, 0.5)
 
+    # ASP name mappings for rebalancing
+    asp_names = {"urban": ["CityConnect", "UrbanLink", "StreetNet"],
+                 "mountain": ["AlpineReach", "SummitField", "AlpinGmbH"],
+                 "climb": ["SkyClimb", "TowerPro", "VerticalWorks"]}
+    asp_new = {"urban": ["UrbanLink", "StreetNet", "Urban ASP 4", "Urban ASP 5"],
+               "mountain": ["SummitField", "AlpinGmbH", "Mountain ASP 4", "Mountain ASP 5"],
+               "climb": ["TowerPro", "VerticalWorks", "Climb ASP 4", "Climb ASP 5"]}
     monthly_scores = []
     monthly_allocs = []
-    prev_alloc = {p: dict(a) for p, a in start_alloc.items()}
+    prev_alloc = {p: dict(a) for p, a in start_alloc.items()}    # First ASP per profile (the one that gets capped/removed)
+    asp_first = {"urban": "CityConnect", "mountain": "AlpineReach", "climb": "SkyClimb"}
+    asp_second = {"urban": "UrbanLink", "mountain": "SummitField", "climb": "TowerPro"}
 
     for month in range(1, n_months + 1):
         m_rng = np.random.default_rng(seed + 300 + month)
@@ -820,24 +829,24 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
         for profile in profiles:
             p = profile.title()
             if month < 25:
-                active_asps[profile] = [f"{p} ASP 1", f"{p} ASP 2", f"{p} ASP 3"]
+                active_asps[profile] = asp_names[profile]
             else:
-                active_asps[profile] = [f"{p} ASP 2", f"{p} ASP 3", f"{p} ASP 4", f"{p} ASP 5"]
+                active_asps[profile] = asp_new[profile]
         for profile in profiles:
             for asp in active_asps[profile]:
                 noise = m_rng.normal(0, 1.2)
                 drift = trends.get(asp, 0) * month * 0.2
                 event = 0
-                if 6 <= month <= 10 and asp.endswith("ASP 1"):
+                if 6 <= month <= 10 and asp == asp_first[profile]:
                     event = -18
                 if 18 <= month <= 21:
                     event = -10 - m_rng.uniform(0, 5)
                     if profile == "mountain":
                         event -= 4
                 if month >= 25:
-                    if "4" in asp or "5" in asp:
-                        event = 5 + (month - 25) * 0.6
-                    elif asp.endswith("ASP 2"):
+                    if asp.startswith("Urban ASP") or asp.startswith("Mountain ASP") or asp.startswith("Climb ASP"):
+                        event = 5 + (month - 25) * 0.6  # new ASPs growing
+                    elif asp == asp_second[profile]:
                         event = 10 + (month - 25) * 0.4
                 month_score[asp] = max(5, min(95, base_scores.get(asp, 40) + drift + noise + event))
 
@@ -859,7 +868,7 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
                 raw[asp] = prev + max(-5, min(5, raw[asp] - prev))
             if 6 <= month <= 10:
                 for asp in asps:
-                    if asp.endswith("ASP 1") and raw[asp] > 30:
+                    if asp == asp_first[profile] and raw[asp] > 30:
                         excess = raw[asp] - 30
                         raw[asp] = 30
                         for o in [a for a in asps if a != asp]:
@@ -900,9 +909,9 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
         tot_cost, tot_sla, tot_nps, tot_repeat, tot_w = 0, 0, 0, 0, 0
         eq_cost, eq_sla, eq_nps, eq_repeat, eq_w = 0, 0, 0, 0, 0
 
-        # M8-M21: crisis period — SLA/NPS collapse for non-mountain, cost rises
+        # M18-M21: flood crisis — SLA/NPS collapse for non-mountain, cost rises
         month = m_idx + 1
-        in_crisis = 8 <= month <= 21
+        in_crisis = 18 <= month <= 21
 
         for profile in profiles:
             asps_in = list(alloc[profile].keys())
@@ -917,9 +926,9 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
 
                 # Crisis impact M8-M21: all profiles except mountain get hit
                 if in_crisis and profile != "mountain":
-                    intensity = min(1.0, (month - 7) / 5)  # ramps up
-                    if month > 18:
-                        intensity *= (21 - month) / 3  # recovery
+                    intensity = min(1.0, (month - 17) / 2)  # ramps up M18-M19
+                    if month > 19:
+                        intensity *= (21 - month) / 2  # recovery M20-M21
                     cost += 15 * intensity  # travel/people cost increase
                     sla -= 12 * intensity  # SLA collapse
                     nps -= 15 * intensity  # NPS collapse
@@ -1008,9 +1017,9 @@ def _tab_rebalancing(settings):
     ph_journey = st.empty()
     ph_journey.markdown("""
 **Our journey to the future:**
-- **Year 1 (M6–M10):** ASP 1 capped at 30% due to capacity constraints
-- **Year 2 (M18–M21):** Flood hits all ASPs — KPIs and scores drop
-- **Year 3 (M25+):** Network rollout → ASP 1 disappears, ASP 4 and ASP 5 start delivering
+- **Year 1 (M6–M10):** CityConnect/AlpineReach/SkyClimb capped at 30% due to capacity constraints
+- **Year 2 (M18–M21):** Flood hits Urban & Climb — SLA and NPS collapse, significant cost increase. Mountain not affected.
+- **Year 3 (M25+):** Network rollout → First ASP exits, new ASPs start delivering
 """)
 
     col_play, col_reset, col_slider = st.columns([1, 1, 3])
@@ -1028,11 +1037,11 @@ def _tab_rebalancing(settings):
     def _render(m):
         m_idx = m - 1
         if 6 <= m <= 10:
-            color, text = "#fff3cd", f"\u26a0\ufe0f M{m}: ASP 1 capacity capped at 30%"
+            color, text = "#fff3cd", f"\u26a0\ufe0f M{m}: First ASP capacity capped at 30%"
         elif 18 <= m <= 21:
-            color, text = "#cce5ff", f"\U0001f30a M{m}: Flood \u2014 all ASPs affected"
+            color, text = "#cce5ff", f"\U0001f30a M{m}: Flood \u2014 Urban & Climb hit (SLA/NPS collapse, cost +15\u20ac). Mountain OK."
         elif m >= 25:
-            color, text = "#ffffff", f"\U0001f680 M{m}: Network rollout \u2014 ASP 1 gone, ASP 4 & ASP 5 active"
+            color, text = "#ffffff", f"\U0001f680 M{m}: Network rollout \u2014 First ASP gone, new ASPs active"
         else:
             color, text = "#d4edda", f"M{m}: Normal operations"
         ph_event.markdown(f'<div style="background:{color};padding:16px;border-radius:8px;text-align:center"><span style="font-size:1.5rem;font-weight:bold;color:black">{text}</span></div>', unsafe_allow_html=True)
@@ -1227,7 +1236,7 @@ def _tab_scenarios(settings):
         },
         "asp_exit": {
             "icon": "🚪", "title": "ASP Market Exit",
-            "subtitle": "Urban ASP 1 and Mountain ASP 3 leave the market",
+            "subtitle": "CityConnect and AlpinGmbH leave the market",
             "weights": {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10},
             "budget_factor": 1.0,
             "constraint_mods": {"block_urban1_mountain3": True},
@@ -1285,8 +1294,8 @@ def _tab_scenarios(settings):
         constraints_sc["weather_reduction_by_profile"] = {"mountain": 0.25, "urban": 0, "climb": 0.20}
     if sc["constraint_mods"].get("block_urban1_mountain3"):
         # Zero out blocked ASPs by setting their capacity to 0
-        constraints_sc["capacity"]["urban_asp_1"] = 0
-        constraints_sc["capacity"]["mountain_asp_3"] = 0
+        constraints_sc["capacity"]["cityconnect"] = 0
+        constraints_sc["capacity"]["alpingmbh"] = 0
 
     result_sc = optimize_allocation(scored_sc, constraints_sc, demands)
     pct_sc = allocation_to_pct(result_sc["allocations"], demands)

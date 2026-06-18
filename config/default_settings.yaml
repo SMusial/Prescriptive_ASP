@@ -4,13 +4,13 @@ random_seed: 42
 profiles:
   urban:
     demand: 1200
-    asps: ["Urban ASP 1", "Urban ASP 2", "Urban ASP 3"]
+    asps: ["CityConnect", "UrbanLink", "StreetNet"]
   mountain:
     demand: 420
-    asps: ["Mountain ASP 1", "Mountain ASP 2", "Mountain ASP 3"]
+    asps: ["AlpineReach", "SummitField", "AlpinGmbH"]
   climb:
     demand: 160
-    asps: ["Climb ASP 1", "Climb ASP 2", "Climb ASP 3"]
+    asps: ["SkyClimb", "TowerPro", "VerticalWorks"]
 
 weights:
   cost: 20
@@ -28,15 +28,15 @@ constraints:
   sme_adjustments: true
 
 capacity:
-  urban_asp_1: 900
-  urban_asp_2: 850
-  urban_asp_3: 800
-  mountain_asp_1: 350
-  mountain_asp_2: 380
-  mountain_asp_3: 300
-  climb_asp_1: 150
-  climb_asp_2: 180
-  climb_asp_3: 160
+  cityconnect: 900
+  urbanlink: 850
+  streetnet: 800
+  alpinereach: 350
+  summitfield: 380
+  alpingmbh: 300
+  skyclimb: 150
+  towerpro: 180
+  verticalworks: 160
 
 rebalancing:
   recent_weight: 0.70
