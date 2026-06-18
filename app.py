@@ -1308,13 +1308,59 @@ def _tab_scenarios(settings):
         with level_cols[i]:
             feasible_icon = "✅" if rl["result"]["feasible"] else "⚠️"
             st.markdown(f"**{rl['label']}** {feasible_icon}")
-            st.plotly_chart(_scenario_bar(rl["pct"], rl["label"]), use_container_width=True)
+            st.plotly_chart(_scenario_bar(rl["pct"], rl["label"]), use_container_width=True, key=f"sc_bar_{selected}_{i}")
             st.metric("Cost", f"€{rl['result']['total_cost']:,.0f}")
             if not rl["result"]["feasible"]:
                 for r in rl["result"]["infeasible_reasons"]:
                     st.caption(f"❌ {r}")
 
-    # KPI impact comparison
+    # Uncertainty & Resilience Assessment
+    st.subheader("Uncertainty & Resilience")
+
+    # Compute resilience score and breaking point
+    feasible_count = sum(1 for rl in results_levels if rl["result"]["feasible"])
+    resilience = int(feasible_count / len(results_levels) * 70 + (30 if results_levels[0]["result"]["feasible"] else 0))
+    res_color = "#00CC96" if resilience >= 70 else "#FFA500" if resilience >= 40 else "#EF553B"
+
+    st.markdown(f"""
+<div style="padding:16px;border-radius:8px;border:2px solid {res_color}">
+<span style="font-size:1.2rem;font-weight:bold">Resilience Score: </span>
+<span style="font-size:2rem;font-weight:bold;color:{res_color}">{resilience}/100</span>
+</div>
+""", unsafe_allow_html=True)
+
+    # Traffic light corridor
+    st.markdown("")
+    zone_cols = st.columns(3)
+    zone_data = [
+        ("🟢 Safe Zone", results_levels[0], "#d4edda"),
+        ("🟡 Watch Zone", results_levels[1], "#fff3cd"),
+        ("🔴 Risk Zone", results_levels[2], "#f8d7da"),
+    ]
+    for col, (zone_label, rl, bg) in zip(zone_cols, zone_data):
+        feasible = rl["result"]["feasible"]
+        kpis = _compute_weighted_kpis(scored_base, rl["result"]["allocations"], rl["demands"])
+        base_kpis = _compute_weighted_kpis(scored_base, result_base["allocations"], demands)
+        sla_delta = kpis["SLA %"] - base_kpis["SLA %"]
+        nps_delta = kpis["NPS"] - base_kpis["NPS"]
+        with col:
+            st.markdown(f"""<div style="background:{bg};padding:12px;border-radius:8px;color:black;min-height:180px">
+<b>{zone_label}</b><br>{rl['label']}<br><br>
+{"✅ Allocation feasible" if feasible else "❌ Infeasible"}<br>
+SLA: {sla_delta:+.0f}% | NPS: {nps_delta:+.0f}<br>
+Cost: €{rl['result']['total_cost']:,.0f}
+</div>""", unsafe_allow_html=True)
+
+    # Breaking point
+    breaking = results_levels[0]["label"]
+    for rl in results_levels:
+        if not rl["result"]["feasible"]:
+            breaking = rl["label"]
+            break
+        breaking = rl["label"]
+    st.markdown(f"**Breaking point:** allocation remains feasible up to **{breaking}** level.")
+
+    # KPI impact table
     st.subheader("KPI Impact Across Levels")
     kpi_data = []
     for rl in results_levels:
@@ -1329,26 +1375,26 @@ def _tab_scenarios(settings):
     # Recommended actions
     st.subheader("Recommended Actions")
     actions = {
-        "budget": ["Shift to lower-cost ASPs where SLA/safety permit",
-                   "Protect Climb safety gates — never compromise",
-                   "Cap cheap ASPs if quality drops at high volume",
-                   "If infeasible: increase budget, reduce scope, or reschedule non-critical work"],
-        "demand": ["Reallocate to ASPs with spare capacity",
-                   "Prioritize high-SLA ASPs for urgent work",
-                   "Add temporary capacity if demand exceeds feasible limits",
-                   "Trigger training/certification if Climb becomes bottleneck"],
-        "repeat": ["Increase repeat-visit weight in scorecard",
-                   "Allocate more to ASPs with strong first-time-fix rate",
-                   "Apply stronger penalty for Climb repeat visits (safety + reputation)",
-                   "Root-cause analysis: distinguish ASP quality vs. task complexity"],
-        "5g": ["Re-score ASPs using 5G readiness criteria",
-               "Add 5G certification as eligibility constraint",
-               "Gradual transition plan — not a one-time switch",
-               "Controlled pilots for newly 5G-certified ASPs",
-               "Track whether self-recovery reduces visits or changes visit type"],
+        "budget": [("🟢", "Shift to lower-cost ASPs where SLA/safety permit"),
+                   ("🟡", "Protect Climb safety gates — never compromise"),
+                   ("🟡", "Cap cheap ASPs if quality drops at high volume"),
+                   ("🔴", "If infeasible: increase budget, reduce scope, or reschedule non-critical work")],
+        "demand": [("🟢", "Reallocate to ASPs with spare capacity"),
+                   ("🟡", "Prioritize high-SLA ASPs for urgent work"),
+                   ("🟡", "Add temporary capacity if demand exceeds feasible limits"),
+                   ("🔴", "Trigger training/certification if Climb becomes bottleneck")],
+        "repeat": [("🟢", "Increase repeat-visit weight in scorecard"),
+                   ("🟡", "Allocate more to ASPs with strong first-time-fix rate"),
+                   ("🟡", "Apply stronger penalty for Climb repeat visits (safety + reputation)"),
+                   ("🔴", "Root-cause analysis: distinguish ASP quality vs. task complexity")],
+        "5g": [("🟢", "Re-score ASPs using 5G readiness criteria"),
+               ("🟡", "Add 5G certification as eligibility constraint"),
+               ("🟡", "Gradual transition plan — not a one-time switch"),
+               ("🔴", "Controlled pilots for newly 5G-certified ASPs"),
+               ("🔴", "Track whether self-recovery reduces visits or changes visit type")],
     }
-    for action in actions[selected]:
-        st.write(f"→ {action}")
+    for icon, action in actions[selected]:
+        st.write(f"{icon} {action}")
 
     # Closing
     st.divider()
