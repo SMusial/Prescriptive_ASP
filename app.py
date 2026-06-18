@@ -1376,12 +1376,12 @@ def _tab_engine_view(settings):
     st.markdown("""
 | | **Capability** | **Method in This Demo** | **Production-Grade Methods** |
 |:---:|:---|:---|:---|
-| 1️⃣ | **Business Scorecard** | Weighted scoring (0–100), global normalization, score² allocation | MCDA, TOPSIS, AHP, Bayesian decision networks |
-| 2️⃣ | **Data Confidence** | Empirical Bayes shrinkage + winsorization (P5/P95) | Hierarchical Bayesian models, Gaussian processes, multiple imputation |
-| 3️⃣ | **Causal Intelligence** | Task difficulty ratios + SME knowledge deltas | Causal DAGs, propensity score matching, causal forests, DiD |
-| 4️⃣ | **Allocation Engine** | Score²-proportional + winner bonus + constraint clipping | Linear programming (PuLP/Gurobi), mixed-integer, robust optimization |
-| 5️⃣ | **Dynamic Rebalancing** | Monthly score simulation + 5pp movement cap | Contextual bandits, reinforcement learning, rolling optimization |
-| 6️⃣ | **Scenario Simulation** | Priority/constraint override + re-optimization | Monte Carlo, stochastic programming, digital twins |
+| 1️⃣ | **Business Scorecard** | Weighted scoring (0–100), global normalization, score² allocation | Multi-Criteria Decision Analysis (MCDA), Technique for Order of Preference by Similarity (TOPSIS), Analytic Hierarchy Process (AHP), Bayesian decision networks |
+| 2️⃣ | **Data Confidence** | Empirical Bayes shrinkage + winsorization (P5/P95) | Hierarchical Bayesian models, Gaussian Processes (GP), Multiple Imputation by Chained Equations (MICE) |
+| 3️⃣ | **Causal Intelligence** | Task difficulty ratios + SME knowledge deltas | Directed Acyclic Graphs (DAG), Propensity Score Matching (PSM), Causal Forests, Difference-in-Differences (DiD) |
+| 4️⃣ | **Allocation Engine** | Score²-proportional + winner bonus + constraint clipping | Linear Programming (LP), Mixed-Integer Programming (MIP), Robust Optimization (RO) |
+| 5️⃣ | **Dynamic Rebalancing** | Monthly score simulation + 5pp movement cap | Contextual Bandits (CB), Reinforcement Learning (RL), Rolling Horizon Optimization (RHO) |
+| 6️⃣ | **Scenario Simulation** | Priority/constraint override + re-optimization | Monte Carlo Simulation (MCS), Stochastic Programming (SP), Digital Twins (DT) |
 """)
 
     st.divider()
