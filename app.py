@@ -136,6 +136,26 @@ def _tab_specification():
         col.markdown(f"""<div style="background:{color};padding:12px;border-radius:8px;text-align:center;height:160px;color:black">
 <b>{icon}<br>{name}</b><br><small>{desc}</small></div>""", unsafe_allow_html=True)
 
+    st.divider()
+
+    col_is, col_not = st.columns(2)
+    with col_is:
+        st.markdown("""#### ✅ This demo IS about
+- Prescriptive analytics **capabilities** for business decisions
+- How to combine data, priorities, causal context & constraints
+- Demonstrating **what to do next** (not just what happened)
+- Showing trade-offs, resilience & scenario planning
+- Business-friendly language & visual decision support
+""")
+    with col_not:
+        st.markdown("""#### ❌ This demo is NOT about
+- A specific real-world use case or real data
+- Data science implementation details or model tuning
+- Production-grade ML pipeline architecture
+- Real-time system integration or APIs
+- Academic statistical rigor or peer-reviewed methods
+""")
+
 
 def _tab_setup(settings):
     st.header("Demo Setup")
