@@ -899,15 +899,38 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
         kpi_rng = np.random.default_rng(seed + 5000 + m_idx)
         tot_cost, tot_sla, tot_nps, tot_repeat, tot_w = 0, 0, 0, 0, 0
         eq_cost, eq_sla, eq_nps, eq_repeat, eq_w = 0, 0, 0, 0, 0
+
+        # M8-M21: crisis period — SLA/NPS collapse for non-mountain, cost rises
+        month = m_idx + 1
+        in_crisis = 8 <= month <= 21
+
         for profile in profiles:
             asps_in = list(alloc[profile].keys())
             equal_pct = 100.0 / len(asps_in) if asps_in else 0
             for asp, pct in alloc[profile].items():
                 sr = max(0.6, min(1.4, monthly_scores[m_idx].get(asp, 50) / max(base_scores.get(asp, 50), 1)))
-                cost = base_cost_map.get(asp, 130) * (1.8 - sr * 0.8) + kpi_rng.normal(0, 2)
-                sla = min(98, base_sla_map.get(asp, 85) * sr + kpi_rng.normal(0, 1))
-                nps = max(-50, min(30, base_nps_map.get(asp, 5) * sr + kpi_rng.normal(0, 3)))
-                repeat = max(0, base_repeat_map.get(asp, 10) * (1.8 - sr * 0.8) + kpi_rng.normal(0, 0.5))
+                # Base KPI values
+                cost = base_cost_map.get(asp, 130) * (1.8 - sr * 0.8) + kpi_rng.normal(0, 4)
+                sla = min(98, base_sla_map.get(asp, 85) * sr + kpi_rng.normal(0, 3))
+                nps = max(-50, min(30, base_nps_map.get(asp, 5) * sr + kpi_rng.normal(0, 5)))
+                repeat = max(0, base_repeat_map.get(asp, 10) * (1.8 - sr * 0.8) + kpi_rng.normal(0, 1.5))
+
+                # Crisis impact M8-M21: all profiles except mountain get hit
+                if in_crisis and profile != "mountain":
+                    intensity = min(1.0, (month - 7) / 5)  # ramps up
+                    if month > 18:
+                        intensity *= (21 - month) / 3  # recovery
+                    cost += 15 * intensity  # travel/people cost increase
+                    sla -= 12 * intensity  # SLA collapse
+                    nps -= 15 * intensity  # NPS collapse
+                    repeat += 4 * intensity
+
+                # Higher variance overall
+                cost = max(50, cost)
+                sla = max(55, min(98, sla))
+                nps = max(-45, min(35, nps))
+                repeat = max(1, min(25, repeat))
+
                 tot_cost += pct * cost; tot_sla += pct * sla; tot_nps += pct * nps; tot_repeat += pct * repeat; tot_w += pct
                 eq_cost += equal_pct * cost; eq_sla += equal_pct * sla; eq_nps += equal_pct * nps; eq_repeat += equal_pct * repeat; eq_w += equal_pct
         opt_cost = int(tot_cost / tot_w) if tot_w else 0
@@ -918,11 +941,16 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
         eq_sla_v = int(min(98, eq_sla / eq_w)) if eq_w else 0
         eq_nps_v = int(max(-50, min(30, eq_nps / eq_w))) if eq_w else 0
         eq_repeat_v = int(max(0, eq_repeat / eq_w)) if eq_w else 0
-        boost = 8
-        opt_cost = int(opt_cost - boost * w_factor["cost"] * 2)
-        opt_sla = int(min(98, opt_sla + boost * w_factor["sla"] * 2))
-        opt_nps = int(max(-50, min(30, opt_nps + boost * w_factor["nps"] * 4)))
-        opt_repeat = int(max(0, opt_repeat - boost * w_factor["repeat"]))
+        # Weight-driven: higher weight = better optimization, weight < 10% = risk of negative impact
+        boost = 10
+        cost_risk = -3 if w_factor["cost"] < 0.10 else 0
+        sla_risk = -4 if w_factor["sla"] < 0.10 else 0
+        nps_risk = -5 if w_factor["nps"] < 0.10 else 0
+        repeat_risk = 2 if w_factor["repeat"] < 0.10 else 0
+        opt_cost = int(opt_cost - boost * w_factor["cost"] * 2 + cost_risk)
+        opt_sla = int(min(98, opt_sla + boost * w_factor["sla"] * 2 + sla_risk))
+        opt_nps = int(max(-50, min(30, opt_nps + boost * w_factor["nps"] * 4 + nps_risk)))
+        opt_repeat = int(max(0, opt_repeat - boost * w_factor["repeat"] + repeat_risk))
         eq_cost_v = max(eq_cost_v, opt_cost)
         monthly_kpis.append({"cost": opt_cost, "sla": opt_sla, "nps": opt_nps, "repeat": opt_repeat})
         monthly_kpis_equal.append({"cost": eq_cost_v, "sla": eq_sla_v, "nps": eq_nps_v, "repeat": eq_repeat_v})
@@ -1031,11 +1059,12 @@ def _tab_rebalancing(settings):
         # KPIs
         kpi = monthly_kpis[m_idx]
         kpi_eq = monthly_kpis_equal[m_idx]
-        # Moving averages for delta row
-        window = monthly_kpis[max(0, m_idx - 2):m_idx + 1]
-        ma_sla = sum(k["sla"] for k in window) // len(window)
-        ma_nps = sum(k["nps"] for k in window) // len(window)
-        ma_repeat = sum(k["repeat"] for k in window) // len(window)
+        # Moving averages of delta (optimized - equal) for last 3 months
+        w_start = max(0, m_idx - 2)
+        w_len = m_idx - w_start + 1
+        ma_sla = sum(monthly_kpis[i]["sla"] - monthly_kpis_equal[i]["sla"] for i in range(w_start, m_idx + 1)) // w_len
+        ma_nps = sum(monthly_kpis[i]["nps"] - monthly_kpis_equal[i]["nps"] for i in range(w_start, m_idx + 1)) // w_len
+        ma_repeat = sum(monthly_kpis[i]["repeat"] - monthly_kpis_equal[i]["repeat"] for i in range(w_start, m_idx + 1)) // w_len
         cum_savings = sum((monthly_kpis_equal[i]["cost"] - monthly_kpis[i]["cost"]) * total_tasks_pm for i in range(m_idx + 1))
         with ph_kpi.container():
             st.markdown("**Optimized Split**")
@@ -1053,13 +1082,13 @@ def _tab_rebalancing(settings):
             st.markdown("**Delta**")
             dc1, dc2, dc3, dc4 = st.columns(4)
             sav_color = "green" if cum_savings >= 0 else "red"
-            c_sla = "green" if ma_sla >= kpi_eq['sla'] else "red"
-            c_nps = "green" if ma_nps >= kpi_eq['nps'] else "red"
-            c_repeat = "green" if ma_repeat <= kpi_eq['repeat'] else "red"
+            c_sla = "green" if ma_sla >= 0 else "red"
+            c_nps = "green" if ma_nps >= 0 else "red"
+            c_repeat = "green" if ma_repeat <= 0 else "red"
             dc1.markdown(f"<span style='color:{sav_color};font-size:1.5rem;font-weight:bold'>\u20ac{cum_savings:,}</span><br><small>Cumulated savings</small>", unsafe_allow_html=True)
-            dc2.markdown(f"<span style='color:{c_sla};font-size:1.5rem;font-weight:bold'>{ma_sla}%</span><br><small>MA SLA</small>", unsafe_allow_html=True)
-            dc3.markdown(f"<span style='color:{c_nps};font-size:1.5rem;font-weight:bold'>{ma_nps}</span><br><small>MA NPS</small>", unsafe_allow_html=True)
-            dc4.markdown(f"<span style='color:{c_repeat};font-size:1.5rem;font-weight:bold'>{ma_repeat}%</span><br><small>MA Repeat</small>", unsafe_allow_html=True)
+            dc2.markdown(f"<span style='color:{c_sla};font-size:1.5rem;font-weight:bold'>{ma_sla:+d}%</span><br><small>MA \u0394 SLA</small>", unsafe_allow_html=True)
+            dc3.markdown(f"<span style='color:{c_nps};font-size:1.5rem;font-weight:bold'>{ma_nps:+d}</span><br><small>MA \u0394 NPS</small>", unsafe_allow_html=True)
+            dc4.markdown(f"<span style='color:{c_repeat};font-size:1.5rem;font-weight:bold'>{ma_repeat:+d}%</span><br><small>MA \u0394 Repeat</small>", unsafe_allow_html=True)
 
     if play:
         ph_journey.empty()  # hide journey text during animation
