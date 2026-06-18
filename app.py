@@ -1026,13 +1026,20 @@ def _tab_rebalancing(settings):
 - **Year 3 (M25+):** Network rollout → First ASP exits, new ASPs start delivering
 """)
 
-    col_play, col_reset, col_slider = st.columns([1, 1, 3])
+    col_play, col_reset = st.columns([1, 1])
     with col_play:
         play = st.button("▶️ Play", key="play_rebal")
     with col_reset:
         reset = st.button("⏮️ Reset", key="reset_rebal")
-    with col_slider:
-        month_slider = st.slider("Month", 1, 36, 1, key="rebal_m36")
+    month_slider = st.slider("Month", 1, 36, 1, key="rebal_m36")
+
+    # ASP name maps for color consistency
+    asp_names = {"urban": ["CityConnect", "UrbanLink", "StreetNet"],
+                 "mountain": ["AlpineReach", "SummitField", "AlpinGmbH"],
+                 "climb": ["SkyClimb", "TowerPro", "VerticalWorks"]}
+    asp_new = {"urban": ["UrbanLink", "StreetNet", "Urban ASP 4", "Urban ASP 5"],
+               "mountain": ["SummitField", "AlpinGmbH", "Mountain ASP 4", "Mountain ASP 5"],
+               "climb": ["TowerPro", "VerticalWorks", "Climb ASP 4", "Climb ASP 5"]}
 
     ph_event = st.empty()
     ph_bar = st.empty()
@@ -1052,13 +1059,24 @@ def _tab_rebalancing(settings):
         # Allocation bar first
         snap = monthly_allocs[m_idx]
         fig = go.Figure()
-        colors_list = ["#90EE90", "#636EFA", "#EF553B", "#FFA500", "#9467BD"]
+        # Fixed color per ASP name: first ASP=green (gone M25+), 2nd=blue, 3rd=red, new=orange/purple
+        asp_color_map = {}
+        for p in profiles:
+            names = asp_names[p]
+            asp_color_map[names[0]] = "#90EE90"  # green (exits M25)
+            asp_color_map[names[1]] = "#636EFA"  # blue (stays)
+            asp_color_map[names[2]] = "#EF553B"  # red (stays)
+        for p in profiles:
+            new = asp_new[p]
+            for i, a in enumerate(new):
+                if a not in asp_color_map:
+                    asp_color_map[a] = "#FFA500" if i >= 2 and "4" in a else "#9467BD"
         for profile in reversed(profiles):
             asps_list = list(snap[profile].keys())
-            for idx, asp in enumerate(asps_list):
+            for asp in asps_list:
                 pct = snap[profile][asp]
                 fig.add_trace(go.Bar(name=asp, x=[pct], y=[profile.title()], orientation="h",
-                                     marker_color=colors_list[idx % len(colors_list)],
+                                     marker_color=asp_color_map.get(asp, "#888"),
                                      text=[f"{asp}: {pct:.0f}%"], textposition="inside",
                                      textfont=dict(color="black"), showlegend=(profile == "urban")))
         fig.update_layout(barmode="stack", height=220, title=f"Month {m} \u2014 Recommended Task Split",
