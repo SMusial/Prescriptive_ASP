@@ -921,23 +921,25 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
                 # Base KPI values
                 cost = base_cost_map.get(asp, 130) * (1.8 - sr * 0.8) + kpi_rng.normal(0, 4)
                 sla = min(98, base_sla_map.get(asp, 85) * sr + kpi_rng.normal(0, 3))
-                nps = max(-50, min(30, base_nps_map.get(asp, 5) * sr + kpi_rng.normal(0, 5)))
+                # NPS: starts negative, trends positive toward +35 over 36 months
+                nps_trend = -25 + (m_idx / 36) * 60  # from -25 to +35
+                nps = nps_trend + kpi_rng.normal(0, 5)
                 repeat = max(0, base_repeat_map.get(asp, 10) * (1.8 - sr * 0.8) + kpi_rng.normal(0, 1.5))
 
-                # Crisis impact M8-M21: all profiles except mountain get hit
+                # Crisis impact M18-M21: Urban & Climb hit
                 if in_crisis and profile != "mountain":
-                    intensity = min(1.0, (month - 17) / 2)  # ramps up M18-M19
+                    intensity = min(1.0, (month - 17) / 2)
                     if month > 19:
-                        intensity *= (21 - month) / 2  # recovery M20-M21
-                    cost += 15 * intensity  # travel/people cost increase
-                    sla -= 12 * intensity  # SLA collapse
-                    nps -= 15 * intensity  # NPS collapse
+                        intensity *= (21 - month) / 2
+                    cost += 15 * intensity
+                    sla -= 12 * intensity
+                    nps -= 30 * intensity  # severe NPS collapse during flood
                     repeat += 4 * intensity
 
-                # Higher variance overall
+                # Clamp
                 cost = max(50, cost)
                 sla = max(55, min(98, sla))
-                nps = max(-45, min(35, nps))
+                nps = max(-60, min(40, nps))
                 repeat = max(1, min(25, repeat))
 
                 tot_cost += pct * cost; tot_sla += pct * sla; tot_nps += pct * nps; tot_repeat += pct * repeat; tot_w += pct
@@ -954,12 +956,14 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
         boost = 10
         cost_risk = -3 if w_factor["cost"] < 0.10 else 0
         sla_risk = -4 if w_factor["sla"] < 0.10 else 0
-        nps_risk = -5 if w_factor["nps"] < 0.10 else 0
+        nps_risk = -8 if w_factor["nps"] < 0.10 else 0
         repeat_risk = 2 if w_factor["repeat"] < 0.10 else 0
         opt_cost = int(opt_cost - boost * w_factor["cost"] * 2 + cost_risk)
         opt_sla = int(min(98, opt_sla + boost * w_factor["sla"] * 2 + sla_risk))
-        opt_nps = int(max(-50, min(30, opt_nps + boost * w_factor["nps"] * 4 + nps_risk)))
+        opt_nps = int(max(-60, min(40, opt_nps + boost * w_factor["nps"] * 8 + nps_risk)))
         opt_repeat = int(max(0, opt_repeat - boost * w_factor["repeat"] + repeat_risk))
+        # Equal split NPS should be worse (no optimization benefit)
+        eq_nps_v = int(eq_nps_v - 5)
         eq_cost_v = max(eq_cost_v, opt_cost)
         monthly_kpis.append({"cost": opt_cost, "sla": opt_sla, "nps": opt_nps, "repeat": opt_repeat})
         monthly_kpis_equal.append({"cost": eq_cost_v, "sla": eq_sla_v, "nps": eq_nps_v, "repeat": eq_repeat_v})
