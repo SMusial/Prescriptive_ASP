@@ -1310,21 +1310,73 @@ def _tab_scenarios(settings):
             for asp in ["CityConnect", "AlpineReach", "SkyClimb"]:
                 scored_sc.loc[scored_sc["asp"] == asp, "business_score"] *= max(0.05, 1 - factor * 0.9)
             # Increase cost significantly for 5G swap work
-            cost_multiplier = 1 + factor * 0.6  # conservative=+12%, expected=+30%, accelerated=+48%
+            cost_multiplier = 1 + factor * 0.6
             scored_sc["smoothed_cost"] = scored_sc["smoothed_cost"] * cost_multiplier
-            # Accelerated rollout: add 2 new 5G-specialist ASPs per profile
+            # Accelerated rollout: add new 5G-specialist ASPs
             if factor >= 0.8:
                 import pandas as pd
                 new_asps = []
-                for profile in ["urban", "mountain", "climb"]:
-                    prof_data = scored_sc[scored_sc["profile"] == profile].iloc[0].to_dict()
-                    for suffix, score_boost in [("5G-Alpha", 1.3), ("5G-Beta", 1.15)]:
-                        new = dict(prof_data)
-                        new["asp"] = f"{profile.title()} {suffix}"
-                        new["business_score"] = prof_data["business_score"] * score_boost
-                        new["smoothed_cost"] = prof_data["smoothed_cost"] * 1.2  # 5G specialists cost more
-                        new_asps.append(new)
+                # Urban gets 1 extra ASP
+                u_ref = scored_sc[scored_sc["profile"] == "urban"].iloc[1].to_dict()
+                u_new = dict(u_ref)
+                u_new["asp"] = "Urban 5G-Ops"
+                u_new["business_score"] = u_ref["business_score"] * 1.2
+                u_new["smoothed_cost"] = u_ref["smoothed_cost"] * 1.25
+                new_asps.append(u_new)
+                # Mountain gets 2 extra ASPs
+                m_ref = scored_sc[scored_sc["profile"] == "mountain"].iloc[1].to_dict()
+                for name, boost in [("Mountain 5G-Alpha", 1.25), ("Mountain 5G-Beta", 1.1)]:
+                    m_new = dict(m_ref)
+                    m_new["asp"] = name
+                    m_new["business_score"] = m_ref["business_score"] * boost
+                    m_new["smoothed_cost"] = m_ref["smoothed_cost"] * 1.3
+                    new_asps.append(m_new)
                 scored_sc = pd.concat([scored_sc, pd.DataFrame(new_asps)], ignore_index=True)
+                # Override PROFILES for this run by adding to demands_sc via custom optimizer call
+                from src.data_generator import PROFILES as _P
+                profiles_5g = {
+                    "urban": {"asps": list(_P["urban"]["asps"]) + ["Urban 5G-Ops"]},
+                    "mountain": {"asps": list(_P["mountain"]["asps"]) + ["Mountain 5G-Alpha", "Mountain 5G-Beta"]},
+                    "climb": {"asps": list(_P["climb"]["asps"])},
+                }
+                # Direct optimizer call with custom profiles
+                settings_sc["constraints"] = constraints_sc_settings
+                c_sc = build_constraints(settings_sc, sme_effects, scored_sc)
+                c_sc["planning_weeks"] = st.session_state.get("planning_weeks", 4)
+                # Manual allocation with extended ASPs
+                from src.optimizer import allocation_to_pct as _atp
+                r_sc_allocs = {}
+                total_cost_5g = 0
+                infeasible_5g = []
+                for profile, pcfg in profiles_5g.items():
+                    asps = pcfg["asps"]
+                    demand = demands_sc.get(profile, demands[profile])
+                    p_scored = scored_sc[scored_sc["profile"] == profile].set_index("asp")
+                    scores_p = {a: p_scored.loc[a, "business_score"] if a in p_scored.index else 50 for a in asps}
+                    score_total = sum(max(s, 1) ** 2 for s in scores_p.values())
+                    alloc = {}
+                    for asp in asps:
+                        prop = max(scores_p[asp], 1) ** 2 / score_total
+                        alloc[asp] = max(int(demand * 0.05), int(demand * prop))
+                    # Normalize to demand
+                    t = sum(alloc.values())
+                    alloc = {a: int(v / t * demand) for a, v in alloc.items()}
+                    # Fix rounding
+                    diff = demand - sum(alloc.values())
+                    if diff != 0:
+                        top = max(alloc, key=alloc.get)
+                        alloc[top] += diff
+                    for asp, tasks in alloc.items():
+                        if asp in p_scored.index:
+                            total_cost_5g += tasks * p_scored.loc[asp, "smoothed_cost"]
+                    r_sc_allocs[profile] = alloc
+                r_sc = {"allocations": r_sc_allocs, "total_cost": total_cost_5g, "feasible": True, "infeasible_reasons": []}
+                pct_sc = {}
+                for p, a in r_sc_allocs.items():
+                    d = sum(a.values())
+                    pct_sc[p] = {asp: round(v / d * 100, 1) for asp, v in a.items()}
+                results_levels.append({"label": label, "result": r_sc, "pct": pct_sc, "demands": demands_sc})
+                continue
             constraints_sc_settings["budget"] = int(budget_base * (1 + factor * 0.5))
 
         settings_sc["constraints"] = constraints_sc_settings
