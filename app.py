@@ -1299,14 +1299,33 @@ def _tab_scenarios(settings):
             cost_w = 20 + int((1 - factor) * 200)
             w_budget = {"cost": cost_w, "safety": 20, "sla": 15, "nps": 10, "repeat_visits": 5}
             scored_sc = compute_scores(st.session_state["metrics"], w_budget)
+            # Also increase smoothed_cost for expensive ASPs to amplify difference
+            scored_sc.loc[scored_sc["business_score"] < 40, "smoothed_cost"] *= (1 + (1 - factor))
         elif selected == "demand":
             demands_sc = {p: int(v * factor) for p, v in demands.items()}
+            # Higher demand = tighter capacity = lower SLA for overloaded ASPs
+            scored_sc.loc[scored_sc["business_score"] < 50, "smoothed_sla"] *= (2 - factor)
         elif selected == "5g":
+            # Penalize legacy ASPs heavily
             for asp in ["CityConnect", "AlpineReach", "SkyClimb"]:
-                scored_sc.loc[scored_sc["asp"] == asp, "business_score"] *= max(0.1, 1 - factor * 0.7)
-            # Accelerated rollout: add cost for swap sites (500+ sites/month)
+                scored_sc.loc[scored_sc["asp"] == asp, "business_score"] *= max(0.05, 1 - factor * 0.9)
+            # Increase cost significantly for 5G swap work
+            cost_multiplier = 1 + factor * 0.6  # conservative=+12%, expected=+30%, accelerated=+48%
+            scored_sc["smoothed_cost"] = scored_sc["smoothed_cost"] * cost_multiplier
+            # Accelerated rollout: add 2 new 5G-specialist ASPs per profile
             if factor >= 0.8:
-                constraints_sc_settings["budget"] = int(budget_base * 1.4)  # 40% more budget needed
+                import pandas as pd
+                new_asps = []
+                for profile in ["urban", "mountain", "climb"]:
+                    prof_data = scored_sc[scored_sc["profile"] == profile].iloc[0].to_dict()
+                    for suffix, score_boost in [("5G-Alpha", 1.3), ("5G-Beta", 1.15)]:
+                        new = dict(prof_data)
+                        new["asp"] = f"{profile.title()} {suffix}"
+                        new["business_score"] = prof_data["business_score"] * score_boost
+                        new["smoothed_cost"] = prof_data["smoothed_cost"] * 1.2  # 5G specialists cost more
+                        new_asps.append(new)
+                scored_sc = pd.concat([scored_sc, pd.DataFrame(new_asps)], ignore_index=True)
+            constraints_sc_settings["budget"] = int(budget_base * (1 + factor * 0.5))
 
         settings_sc["constraints"] = constraints_sc_settings
         c_sc = build_constraints(settings_sc, sme_effects, scored_sc)
@@ -1335,21 +1354,21 @@ def _tab_scenarios(settings):
                 for r in rl["result"]["infeasible_reasons"]:
                     st.caption(f"❌ {r}")
 
-    # Resilience score (max 95 — 100 is never achievable because uncertainty always exists)
+    # Resilience score (realistic: typically 40-75 range)
     st.subheader("Resilience Assessment")
     feasible_count = sum(1 for rl in results_levels if rl["result"]["feasible"])
     base_kpis = _compute_weighted_kpis(scored_base, result_base["allocations"], demands)
-    # Score: feasibility (0-60) + KPI stability (0-35). Max = 95.
-    kpi_stability = 35
+    kpi_penalty = 0
     for rl in results_levels:
         k = _compute_weighted_kpis(scored_base, rl["result"]["allocations"], rl["demands"])
-        if abs(k["SLA %"] - base_kpis["SLA %"]) > 5:
-            kpi_stability -= 10
-        if abs(k["NPS"] - base_kpis["NPS"]) > 8:
-            kpi_stability -= 5
-    resilience = int(feasible_count / len(results_levels) * 60 + max(0, kpi_stability))
-    resilience = min(95, resilience)
-    res_color = "#00CC96" if resilience >= 70 else "#FFA500" if resilience >= 40 else "#EF553B"
+        if abs(k["SLA %"] - base_kpis["SLA %"]) > 3:
+            kpi_penalty += 8
+        if abs(k["NPS"] - base_kpis["NPS"]) > 5:
+            kpi_penalty += 6
+        if abs(k["Avg Cost/Task"] - base_kpis["Avg Cost/Task"]) > 10:
+            kpi_penalty += 5
+    resilience = max(15, min(85, int(feasible_count * 25 + 30 - kpi_penalty)))
+    res_color = "#00CC96" if resilience >= 65 else "#FFA500" if resilience >= 40 else "#EF553B"
 
     st.markdown(f"""
 <div style="padding:12px;border-radius:8px;border:2px solid {res_color};display:inline-block">
