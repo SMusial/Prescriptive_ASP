@@ -1304,6 +1304,9 @@ def _tab_scenarios(settings):
         elif selected == "5g":
             for asp in ["CityConnect", "AlpineReach", "SkyClimb"]:
                 scored_sc.loc[scored_sc["asp"] == asp, "business_score"] *= max(0.1, 1 - factor * 0.7)
+            # Accelerated rollout: add cost for swap sites (500+ sites/month)
+            if factor >= 0.8:
+                constraints_sc_settings["budget"] = int(budget_base * 1.4)  # 40% more budget needed
 
         settings_sc["constraints"] = constraints_sc_settings
         c_sc = build_constraints(settings_sc, sme_effects, scored_sc)
@@ -1332,40 +1335,77 @@ def _tab_scenarios(settings):
                 for r in rl["result"]["infeasible_reasons"]:
                     st.caption(f"❌ {r}")
 
-    # Resilience score
+    # Resilience score (max 95 — 100 is never achievable because uncertainty always exists)
     st.subheader("Resilience Assessment")
     feasible_count = sum(1 for rl in results_levels if rl["result"]["feasible"])
-    resilience = int(feasible_count / len(results_levels) * 70 + (30 if results_levels[0]["result"]["feasible"] else 0))
+    base_kpis = _compute_weighted_kpis(scored_base, result_base["allocations"], demands)
+    # Score: feasibility (0-60) + KPI stability (0-35). Max = 95.
+    kpi_stability = 35
+    for rl in results_levels:
+        k = _compute_weighted_kpis(scored_base, rl["result"]["allocations"], rl["demands"])
+        if abs(k["SLA %"] - base_kpis["SLA %"]) > 5:
+            kpi_stability -= 10
+        if abs(k["NPS"] - base_kpis["NPS"]) > 8:
+            kpi_stability -= 5
+    resilience = int(feasible_count / len(results_levels) * 60 + max(0, kpi_stability))
+    resilience = min(95, resilience)
     res_color = "#00CC96" if resilience >= 70 else "#FFA500" if resilience >= 40 else "#EF553B"
 
     st.markdown(f"""
 <div style="padding:12px;border-radius:8px;border:2px solid {res_color};display:inline-block">
 <span style="font-size:1.1rem;font-weight:bold">Resilience Score: </span>
 <span style="font-size:1.8rem;font-weight:bold;color:{res_color}">{resilience}/100</span>
-<span style="font-size:0.9rem;margin-left:12px">— How robust is the allocation against this scenario?</span>
+<span style="font-size:0.9rem;margin-left:12px">— How robust is the allocation? (100 is unachievable — uncertainty always exists)</span>
 </div>
 """, unsafe_allow_html=True)
 
-    # Recommended actions in traffic-light format
+    # Traffic light trade-off squares
+    st.markdown("")
+    zone_cols = st.columns(3)
+    zone_labels = ["🟢 Safe Zone", "🟡 Watch Zone", "🔴 Risk Zone"]
+    zone_colors = ["#d4edda", "#fff3cd", "#f8d7da"]
+    for i, (col, rl) in enumerate(zip(zone_cols, results_levels)):
+        kpis = _compute_weighted_kpis(scored_base, rl["result"]["allocations"], rl["demands"])
+        sla_d = kpis["SLA %"] - base_kpis["SLA %"]
+        nps_d = kpis["NPS"] - base_kpis["NPS"]
+        cost_d = kpis["Avg Cost/Task"] - base_kpis["Avg Cost/Task"]
+        feasible = rl["result"]["feasible"]
+        with col:
+            st.markdown(f"""<div style="background:{zone_colors[i]};padding:14px;border-radius:8px;color:black;min-height:200px">
+<b>{zone_labels[i]}</b><br><b>{rl['label']}</b><br><br>
+{"✅ Feasible" if feasible else "❌ Infeasible"}<br>
+Cost: {cost_d:+.0f}\u20ac/task<br>
+SLA: {sla_d:+.1f}%<br>
+NPS: {nps_d:+.1f}<br>
+Total: \u20ac{rl['result']['total_cost']:,.0f}
+</div>""", unsafe_allow_html=True)
+
+    # Recommended actions with specific figures
     st.subheader("Recommended Actions")
-    actions = {
-        "budget": [
-            ("🟢", sc["levels"][0][0], "Approve — minimal risk, small shift to cheaper ASPs"),
-            ("🟡", sc["levels"][1][0], "Discuss — SLA/NPS trade-off visible, needs business decision"),
-            ("🔴", sc["levels"][2][0], "Escalate — infeasibility risk, recommend scope reduction or deferral"),
-        ],
-        "demand": [
-            ("🟢", sc["levels"][0][0], "Approve — spare capacity absorbs the increase"),
-            ("🟡", sc["levels"][1][0], "Plan — prioritize high-SLA ASPs, monitor capacity utilization"),
-            ("🔴", sc["levels"][2][0], "Act — add temporary capacity, reschedule non-critical work"),
-        ],
-        "5g": [
-            ("🟢", sc["levels"][0][0], "Prepare — re-score ASPs, identify skill gaps early"),
-            ("🟡", sc["levels"][1][0], "Transition — add 5G certification as constraint, run controlled pilots"),
-            ("🔴", sc["levels"][2][0], "Transform — separate 4G/5G allocation logic, accelerate training"),
-        ],
-    }
-    for icon, level, action in actions[selected]:
+    mild_cost = results_levels[0]["result"]["total_cost"]
+    severe_cost = results_levels[2]["result"]["total_cost"]
+    base_cost = result_base["total_cost"]
+
+    if selected == "budget":
+        actions = [
+            ("🟢", sc["levels"][0][0], f"Approve — saves \u20ac{base_cost - mild_cost:,.0f}, shift {int(abs(pct_base['urban'].get('CityConnect',0) - results_levels[0]['pct']['urban'].get('CityConnect',0)))}pp to CityConnect"),
+            ("🟡", sc["levels"][1][0], f"Discuss — saves \u20ac{base_cost - results_levels[1]['result']['total_cost']:,.0f} but SLA may drop {abs(_compute_weighted_kpis(scored_base, results_levels[1]['result']['allocations'], demands)['SLA %'] - base_kpis['SLA %']):.1f}%"),
+            ("🔴", sc["levels"][2][0], f"Escalate — \u20ac{severe_cost:,.0f} total, reduce scope by ~{int(sum(demands.values())*0.1)} tasks or add \u20ac{int((base_cost-severe_cost)*0.3):,} budget"),
+        ]
+    elif selected == "demand":
+        extra_tasks = int(sum(demands.values()) * 0.4)
+        actions = [
+            ("🟢", sc["levels"][0][0], f"Approve — {int(sum(demands.values())*0.1):,} extra tasks absorbed within capacity"),
+            ("🟡", sc["levels"][1][0], f"Plan — {int(sum(demands.values())*0.2):,} extra tasks, monitor Climb capacity (closest to limit)"),
+            ("🔴", sc["levels"][2][0], f"Act — {extra_tasks:,} extra tasks, add ≥2 temporary crews or defer {int(extra_tasks*0.3):,} non-critical tasks"),
+        ]
+    elif selected == "5g":
+        actions = [
+            ("🟢", sc["levels"][0][0], f"Prepare — re-score 9 ASPs on 5G readiness, identify 3 ASPs needing training within 6 months"),
+            ("🟡", sc["levels"][1][0], f"Transition — onboard 2 new 5G-specialist ASPs, increase cost budget by ~\u20ac{int(severe_cost*0.15):,} for swap sites"),
+            ("🔴", sc["levels"][2][0], f"Transform — 500+ swap sites/month, add ASP 4 & ASP 5, cost +40%, separate 4G legacy from 5G ops"),
+        ]
+    for icon, level, action in actions:
         st.markdown(f"{icon} **{level}:** {action}")
 
     # Closing
