@@ -10,16 +10,17 @@ PROFILES = {
 }
 
 # ASP characteristic templates: (cost_mean, sla_rate, nps_mean, repeat_rate, safety_score, complexity_bias, emergency_share)
+# Design: each ASP excels at ONE thing, creating genuine trade-offs
 ASP_TEMPLATES = {
-    "CityConnect": (75, 0.86, -10, 0.10, 80, 0.35, 0.08),
-    "UrbanLink": (125, 0.95, 35, 0.04, 88, 0.50, 0.12),
-    "StreetNet": (100, 0.82, -15, 0.13, 76, 0.70, 0.06),
-    "AlpineReach": (120, 0.87, 35, 0.06, 75, 0.85, 0.45),
-    "SummitField": (100, 0.93, 5, 0.04, 90, 0.35, 0.08),
-    "AlpinGmbH": (140, 0.84, -10, 0.12, 82, 0.50, 0.18),
-    "SkyClimb": (130, 0.78, -5, 0.14, 70, 0.75, 0.20),
-    "TowerPro": (170, 0.91, 20, 0.05, 93, 0.40, 0.08),
-    "VerticalWorks": (200, 0.93, 25, 0.03, 97, 0.50, 0.06),
+    "CityConnect": (70, 0.82, -15, 0.12, 78, 0.35, 0.08),    # Urban: cheapest, weak SLA/NPS
+    "UrbanLink": (130, 0.95, 35, 0.04, 88, 0.50, 0.12),       # Urban: best SLA/NPS, expensive
+    "StreetNet": (100, 0.87, 5, 0.08, 82, 0.70, 0.06),         # Urban: balanced middle
+    "AlpineReach": (145, 0.90, 30, 0.03, 78, 0.85, 0.45),     # Mountain: expensive, best quality (lowest repeat)
+    "SummitField": (95, 0.88, -5, 0.09, 92, 0.35, 0.08),      # Mountain: cheapest, best safety, higher repeat
+    "AlpinGmbH": (120, 0.93, 15, 0.06, 80, 0.50, 0.18),       # Mountain: best SLA, moderate cost
+    "SkyClimb": (125, 0.78, -10, 0.14, 70, 0.75, 0.20),       # Climb: cheap, poor safety/quality
+    "TowerPro": (175, 0.92, 25, 0.04, 94, 0.40, 0.08),        # Climb: best SLA/NPS/quality, expensive
+    "VerticalWorks": (200, 0.88, 10, 0.06, 98, 0.50, 0.06),   # Climb: safest, most expensive
 }
 
 

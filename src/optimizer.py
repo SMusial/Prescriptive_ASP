@@ -64,12 +64,12 @@ def optimize_allocation(scored_df: pd.DataFrame, constraints: dict, demands: dic
             proportion = max(scores[asp], 1) ** 2 / score_total
             initial_alloc[asp] = int(demand * proportion)
 
-        # Step 1b: Winner bonus — top ASP gets +15%, 2nd gets +5%, last loses 20%
+        # Step 1b: Winner bonus — top ASP gets +8%, 2nd gets +3%, last loses 11%
         sorted_by_score = sorted(eligible, key=lambda a: scores[a], reverse=True)
         if len(sorted_by_score) >= 2:
-            initial_alloc[sorted_by_score[0]] += int(demand * 0.15)
-            initial_alloc[sorted_by_score[1]] += int(demand * 0.05)
-            bonus_total = int(demand * 0.15) + int(demand * 0.05)
+            initial_alloc[sorted_by_score[0]] += int(demand * 0.08)
+            initial_alloc[sorted_by_score[1]] += int(demand * 0.03)
+            bonus_total = int(demand * 0.08) + int(demand * 0.03)
             initial_alloc[sorted_by_score[-1]] = max(0, initial_alloc[sorted_by_score[-1]] - bonus_total)
 
         # Step 2: Apply constraints (clip to min_share, max_share, capacity, SME caps)

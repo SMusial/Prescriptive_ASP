@@ -1260,7 +1260,7 @@ def _tab_scenarios(settings):
         "demand": {"icon": "📈", "title": "Demand Increase", "subtitle": "How much more can our ASP ecosystem absorb?",
                    "levels": [("Mild +10%", 1.10), ("Expected +20%", 1.20), ("Severe +40%", 1.40)]},
         "repeat": {"icon": "🔄", "title": "Repeat Visit Penalty", "subtitle": "What if poor quality becomes contractually expensive?",
-                   "levels": [("Low penalty", 20), ("Medium penalty", 40), ("High penalty", 60)]},
+                   "levels": [("Low penalty", 40), ("Medium penalty", 80), ("High penalty", 150)]},
         "5g": {"icon": "📡", "title": "4G → 5G Network Swap", "subtitle": "How does technology transformation change allocation?",
                "levels": [("Conservative rollout", 0.2), ("Expected rollout", 0.5), ("Accelerated rollout", 0.8)]},
     }
@@ -1298,21 +1298,21 @@ def _tab_scenarios(settings):
         constraints_sc_settings = {**settings["constraints"], "max_share": cs.get("max_share", settings["constraints"]["max_share"])}
 
         if selected == "budget":
+            # Reduce budget AND shift weights heavily to cost
             constraints_sc_settings["budget"] = int(budget_base * factor)
+            cost_w = 20 + int((1 - factor) * 200)  # -5%→30, -15%→50, -25%→70
+            w_budget = {"cost": cost_w, "safety": 20, "sla": 15, "nps": 10, "repeat_visits": 5}
+            scored_sc = compute_scores(st.session_state["metrics"], w_budget)
         elif selected == "demand":
             demands_sc = {p: int(v * factor) for p, v in demands.items()}
         elif selected == "repeat":
-            # Increase repeat_visits weight
-            w = dict(st.session_state.get("weights", {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10}))
-            w["repeat_visits"] = factor
-            w_total = sum(w.values())
-            w = {k: v / w_total * 100 for k, v in w.items()}
-            scored_sc = compute_scores(st.session_state["metrics"], w)
+            # Heavily shift to repeat_visits + reduce cost importance
+            w_rep = {"cost": 10, "safety": 20, "sla": 15, "nps": 10, "repeat_visits": factor}
+            scored_sc = compute_scores(st.session_state["metrics"], w_rep)
         elif selected == "5g":
-            # 5G readiness: penalize ASPs without "5G skills" (first ASP per profile)
-            for _, row in scored_sc.iterrows():
-                if row["asp"] in ["CityConnect", "AlpineReach", "SkyClimb"]:
-                    scored_sc.loc[scored_sc["asp"] == row["asp"], "business_score"] *= (1 - factor * 0.4)
+            # 5G readiness: heavily penalize first ASPs (no 5G skills)
+            for asp in ["CityConnect", "AlpineReach", "SkyClimb"]:
+                scored_sc.loc[scored_sc["asp"] == asp, "business_score"] *= max(0.1, 1 - factor * 0.7)
 
         settings_sc["constraints"] = constraints_sc_settings
         c_sc = build_constraints(settings_sc, sme_effects, scored_sc)
