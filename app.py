@@ -1253,20 +1253,18 @@ def _tab_scenarios(settings):
     result_base = optimize_allocation(scored_base, constraints_base, demands)
     pct_base = allocation_to_pct(result_base["allocations"], demands)
 
-    # Scenario definitions
+    # Scenario definitions (3 scenarios, no repeat penalty)
     scenarios = {
         "budget": {"icon": "💰", "title": "Budget Reduction", "subtitle": "Can we reduce cost without breaking performance?",
                    "levels": [("Mild −5%", 0.95), ("Expected −15%", 0.85), ("Severe −25%", 0.75)]},
         "demand": {"icon": "📈", "title": "Demand Increase", "subtitle": "How much more can our ASP ecosystem absorb?",
                    "levels": [("Mild +10%", 1.10), ("Expected +20%", 1.20), ("Severe +40%", 1.40)]},
-        "repeat": {"icon": "🔄", "title": "Repeat Visit Penalty", "subtitle": "What if poor quality becomes contractually expensive?",
-                   "levels": [("Low penalty", 40), ("Medium penalty", 80), ("High penalty", 150)]},
         "5g": {"icon": "📡", "title": "4G → 5G Network Swap", "subtitle": "How does technology transformation change allocation?",
                "levels": [("Conservative rollout", 0.2), ("Expected rollout", 0.5), ("Accelerated rollout", 0.8)]},
     }
 
     # Scenario selector
-    cols = st.columns(4)
+    cols = st.columns(3)
     selected = None
     for i, (key, sc) in enumerate(scenarios.items()):
         if cols[i].button(f"{sc['icon']} {sc['title']}", key=f"sc_{key}", use_container_width=True):
@@ -1279,7 +1277,6 @@ def _tab_scenarios(settings):
 |---|---|---|
 | 💰 Budget Reduction | Can we reduce cost safely? | Finds cost-risk breaking point |
 | 📈 Demand Increase | Can ASPs absorb more work? | Identifies capacity bottlenecks |
-| 🔄 Repeat Visit Penalty | What if poor quality becomes expensive? | Shifts to first-time-fix |
 | 📡 4G → 5G Swap | How does transformation change allocation? | Strategic readiness planning |
 """)
         return
@@ -1298,19 +1295,13 @@ def _tab_scenarios(settings):
         constraints_sc_settings = {**settings["constraints"], "max_share": cs.get("max_share", settings["constraints"]["max_share"])}
 
         if selected == "budget":
-            # Reduce budget AND shift weights heavily to cost
             constraints_sc_settings["budget"] = int(budget_base * factor)
-            cost_w = 20 + int((1 - factor) * 200)  # -5%→30, -15%→50, -25%→70
+            cost_w = 20 + int((1 - factor) * 200)
             w_budget = {"cost": cost_w, "safety": 20, "sla": 15, "nps": 10, "repeat_visits": 5}
             scored_sc = compute_scores(st.session_state["metrics"], w_budget)
         elif selected == "demand":
             demands_sc = {p: int(v * factor) for p, v in demands.items()}
-        elif selected == "repeat":
-            # Heavily shift to repeat_visits + reduce cost importance
-            w_rep = {"cost": 10, "safety": 20, "sla": 15, "nps": 10, "repeat_visits": factor}
-            scored_sc = compute_scores(st.session_state["metrics"], w_rep)
         elif selected == "5g":
-            # 5G readiness: heavily penalize first ASPs (no 5G skills)
             for asp in ["CityConnect", "AlpineReach", "SkyClimb"]:
                 scored_sc.loc[scored_sc["asp"] == asp, "business_score"] *= max(0.1, 1 - factor * 0.7)
 
@@ -1321,11 +1312,18 @@ def _tab_scenarios(settings):
         pct_sc = allocation_to_pct(r_sc["allocations"], demands_sc)
         results_levels.append({"label": label, "result": r_sc, "pct": pct_sc, "demands": demands_sc})
 
-    # Display: 3-level comparison
-    st.subheader("Uncertainty Levels")
+    # Display: Baseline + 2 what-if levels (3 columns total)
+    st.subheader("Task Split: Baseline → What-If")
     level_cols = st.columns(3)
-    for i, rl in enumerate(results_levels):
-        with level_cols[i]:
+    # Baseline first
+    with level_cols[0]:
+        st.markdown("**📋 Baseline (current)**")
+        st.plotly_chart(_scenario_bar(pct_base, "Baseline"), use_container_width=True, key=f"sc_bar_{selected}_base")
+        st.metric("Cost", f"€{result_base['total_cost']:,.0f}")
+    # Two what-if levels (mild and severe)
+    for i, idx in enumerate([0, 2]):  # show mild and severe
+        rl = results_levels[idx]
+        with level_cols[i + 1]:
             feasible_icon = "✅" if rl["result"]["feasible"] else "⚠️"
             st.markdown(f"**{rl['label']}** {feasible_icon}")
             st.plotly_chart(_scenario_bar(rl["pct"], rl["label"]), use_container_width=True, key=f"sc_bar_{selected}_{i}")
@@ -1334,87 +1332,41 @@ def _tab_scenarios(settings):
                 for r in rl["result"]["infeasible_reasons"]:
                     st.caption(f"❌ {r}")
 
-    # Uncertainty & Resilience Assessment
-    st.subheader("Uncertainty & Resilience")
-
-    # Compute resilience score and breaking point
+    # Resilience score
+    st.subheader("Resilience Assessment")
     feasible_count = sum(1 for rl in results_levels if rl["result"]["feasible"])
     resilience = int(feasible_count / len(results_levels) * 70 + (30 if results_levels[0]["result"]["feasible"] else 0))
     res_color = "#00CC96" if resilience >= 70 else "#FFA500" if resilience >= 40 else "#EF553B"
 
     st.markdown(f"""
-<div style="padding:16px;border-radius:8px;border:2px solid {res_color}">
-<span style="font-size:1.2rem;font-weight:bold">Resilience Score: </span>
-<span style="font-size:2rem;font-weight:bold;color:{res_color}">{resilience}/100</span>
+<div style="padding:12px;border-radius:8px;border:2px solid {res_color};display:inline-block">
+<span style="font-size:1.1rem;font-weight:bold">Resilience Score: </span>
+<span style="font-size:1.8rem;font-weight:bold;color:{res_color}">{resilience}/100</span>
+<span style="font-size:0.9rem;margin-left:12px">— How robust is the allocation against this scenario?</span>
 </div>
 """, unsafe_allow_html=True)
 
-    # Traffic light corridor
-    st.markdown("")
-    zone_cols = st.columns(3)
-    zone_data = [
-        ("🟢 Safe Zone", results_levels[0], "#d4edda"),
-        ("🟡 Watch Zone", results_levels[1], "#fff3cd"),
-        ("🔴 Risk Zone", results_levels[2], "#f8d7da"),
-    ]
-    for col, (zone_label, rl, bg) in zip(zone_cols, zone_data):
-        feasible = rl["result"]["feasible"]
-        kpis = _compute_weighted_kpis(scored_base, rl["result"]["allocations"], rl["demands"])
-        base_kpis = _compute_weighted_kpis(scored_base, result_base["allocations"], demands)
-        sla_delta = kpis["SLA %"] - base_kpis["SLA %"]
-        nps_delta = kpis["NPS"] - base_kpis["NPS"]
-        with col:
-            st.markdown(f"""<div style="background:{bg};padding:12px;border-radius:8px;color:black;min-height:180px">
-<b>{zone_label}</b><br>{rl['label']}<br><br>
-{"✅ Allocation feasible" if feasible else "❌ Infeasible"}<br>
-SLA: {sla_delta:+.0f}% | NPS: {nps_delta:+.0f}<br>
-Cost: €{rl['result']['total_cost']:,.0f}
-</div>""", unsafe_allow_html=True)
-
-    # Breaking point
-    breaking = results_levels[0]["label"]
-    for rl in results_levels:
-        if not rl["result"]["feasible"]:
-            breaking = rl["label"]
-            break
-        breaking = rl["label"]
-    st.markdown(f"**Breaking point:** allocation remains feasible up to **{breaking}** level.")
-
-    # KPI impact table
-    st.subheader("KPI Impact Across Levels")
-    kpi_data = []
-    for rl in results_levels:
-        kpis = _compute_weighted_kpis(scored_base, rl["result"]["allocations"], rl["demands"])
-        kpis["Level"] = rl["label"]
-        kpis["Feasible"] = "✅" if rl["result"]["feasible"] else "❌"
-        kpi_data.append(kpis)
-    import pandas as pd
-    kpi_df = pd.DataFrame(kpi_data)[["Level", "Feasible", "Avg Cost/Task", "SLA %", "NPS", "Repeat %"]]
-    st.dataframe(kpi_df, hide_index=True, use_container_width=True)
-
-    # Recommended actions
+    # Recommended actions in traffic-light format
     st.subheader("Recommended Actions")
     actions = {
-        "budget": [("🟢", "Shift to lower-cost ASPs where SLA/safety permit"),
-                   ("🟡", "Protect Climb safety gates — never compromise"),
-                   ("🟡", "Cap cheap ASPs if quality drops at high volume"),
-                   ("🔴", "If infeasible: increase budget, reduce scope, or reschedule non-critical work")],
-        "demand": [("🟢", "Reallocate to ASPs with spare capacity"),
-                   ("🟡", "Prioritize high-SLA ASPs for urgent work"),
-                   ("🟡", "Add temporary capacity if demand exceeds feasible limits"),
-                   ("🔴", "Trigger training/certification if Climb becomes bottleneck")],
-        "repeat": [("🟢", "Increase repeat-visit weight in scorecard"),
-                   ("🟡", "Allocate more to ASPs with strong first-time-fix rate"),
-                   ("🟡", "Apply stronger penalty for Climb repeat visits (safety + reputation)"),
-                   ("🔴", "Root-cause analysis: distinguish ASP quality vs. task complexity")],
-        "5g": [("🟢", "Re-score ASPs using 5G readiness criteria"),
-               ("🟡", "Add 5G certification as eligibility constraint"),
-               ("🟡", "Gradual transition plan — not a one-time switch"),
-               ("🔴", "Controlled pilots for newly 5G-certified ASPs"),
-               ("🔴", "Track whether self-recovery reduces visits or changes visit type")],
+        "budget": [
+            ("🟢", sc["levels"][0][0], "Approve — minimal risk, small shift to cheaper ASPs"),
+            ("🟡", sc["levels"][1][0], "Discuss — SLA/NPS trade-off visible, needs business decision"),
+            ("🔴", sc["levels"][2][0], "Escalate — infeasibility risk, recommend scope reduction or deferral"),
+        ],
+        "demand": [
+            ("🟢", sc["levels"][0][0], "Approve — spare capacity absorbs the increase"),
+            ("🟡", sc["levels"][1][0], "Plan — prioritize high-SLA ASPs, monitor capacity utilization"),
+            ("🔴", sc["levels"][2][0], "Act — add temporary capacity, reschedule non-critical work"),
+        ],
+        "5g": [
+            ("🟢", sc["levels"][0][0], "Prepare — re-score ASPs, identify skill gaps early"),
+            ("🟡", sc["levels"][1][0], "Transition — add 5G certification as constraint, run controlled pilots"),
+            ("🔴", sc["levels"][2][0], "Transform — separate 4G/5G allocation logic, accelerate training"),
+        ],
     }
-    for icon, action in actions[selected]:
-        st.write(f"{icon} {action}")
+    for icon, level, action in actions[selected]:
+        st.markdown(f"{icon} **{level}:** {action}")
 
     # Closing
     st.divider()
