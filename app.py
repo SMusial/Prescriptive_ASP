@@ -29,16 +29,20 @@ def main():
 
     settings = load_settings()
 
-    tabs = st.tabs(["Specification", "Setup", "Data Confidence", "Business Priorities",
+    tabs = st.tabs(["Demo Scope", "Use Case", "Setup", "Data Confidence", "Business Priorities",
                     "Causal Intelligence", "Constraints", "Recommendation",
                     "Dynamic Rebalancing", "Scenarios", "Engine View"])
 
-    # ── TAB 0: Specification ──
+    # ── TAB 0: Demo Scope ──
     with tabs[0]:
         _tab_specification()
 
-    # ── TAB 1: Setup ──
+    # ── TAB 1: Use Case ──
     with tabs[1]:
+        _tab_use_case()
+
+    # ── TAB 2: Setup ──
+    with tabs[2]:
         _tab_setup(settings)
 
     if "df" not in st.session_state:
@@ -54,40 +58,88 @@ def main():
         _default_w = {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10}
         st.session_state["scored"] = compute_scores(st.session_state["metrics"], _default_w)
 
-    # ── TAB 2: Data Confidence ──
-    with tabs[2]:
+    # ── TAB 3: Data Confidence ──
+    with tabs[3]:
         _tab_data_confidence()
 
-    # ── TAB 3: Business Priorities ──
-    with tabs[3]:
+    # ── TAB 4: Business Priorities ──
+    with tabs[4]:
         _tab_priorities(settings)
 
-    # ── TAB 4: Causal Intelligence ──
-    with tabs[4]:
+    # ── TAB 5: Causal Intelligence ──
+    with tabs[5]:
         _tab_causal()
 
-    # ── TAB 5: Constraints ──
-    with tabs[5]:
+    # ── TAB 6: Constraints ──
+    with tabs[6]:
         _tab_constraints(settings)
 
-    # ── TAB 6: Recommendation ──
-    with tabs[6]:
+    # ── TAB 7: Recommendation ──
+    with tabs[7]:
         _tab_recommendation(settings)
 
-    # ── TAB 7: Dynamic Rebalancing ──
-    with tabs[7]:
+    # ── TAB 8: Dynamic Rebalancing ──
+    with tabs[8]:
         _tab_rebalancing(settings)
 
-    # ── TAB 8: Scenarios ──
-    with tabs[8]:
+    # ── TAB 9: Scenarios ──
+    with tabs[9]:
         _tab_scenarios(settings)
 
-    # ── TAB 9: Engine View ──
-    with tabs[9]:
+    # ── TAB 10: Engine View ──
+    with tabs[10]:
         _tab_engine_view(settings)
 
 
 # ────────────────────────────────────────────────────────────────
+def _tab_use_case():
+    st.header("📋 Use Case: Field-Service ASP Allocation")
+    st.markdown("""
+**Problem Statement:** A telco company outsources field-service tasks (installations, repairs, climbing work)
+to multiple ASPs (Alternate Service Providers). Today, task volume is split **equally** — 33% per ASP regardless
+of performance, cost, safety or capacity. This is inefficient and risky.
+""")
+
+    st.subheader("Baseline Environment")
+    st.markdown("**9 ASPs across 3 service profiles:**")
+
+    import plotly.graph_objects as go
+    # Equal split baseline visualization
+    fig = go.Figure()
+    colors = ["#90EE90", "#636EFA", "#EF553B"]
+    profiles_data = {
+        "Urban": ["CityConnect", "UrbanLink", "StreetNet"],
+        "Mountain": ["AlpineReach", "SummitField", "AlpinGmbH"],
+        "Climb": ["SkyClimb", "TowerPro", "VerticalWorks"],
+    }
+    for profile in reversed(["Urban", "Mountain", "Climb"]):
+        for idx, asp in enumerate(profiles_data[profile]):
+            fig.add_trace(go.Bar(name=asp, x=[33.3], y=[profile], orientation="h",
+                                 marker_color=colors[idx], text=[f"{asp}: 33%"],
+                                 textposition="inside", textfont=dict(color="black"),
+                                 showlegend=(profile == "Urban")))
+    fig.update_layout(barmode="stack", height=200, title="Today: Equal Split (no optimization)",
+                      margin=dict(l=20, r=20, t=40, b=10), xaxis_title="Share (%)",
+                      legend=dict(orientation="h", y=-0.3))
+    st.plotly_chart(fig, use_container_width=True)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""**What's wrong with equal split?**
+- Ignores ASP performance differences
+- Wastes budget on expensive underperformers
+- Doesn't protect SLA or safety
+- Can't adapt to changing conditions
+""")
+    with col2:
+        st.markdown("""**What prescriptive analytics delivers:**
+- Score-based allocation (best ASP gets more)
+- Constraint-aware (safety, capacity, budget)
+- Causal context (unfair penalties removed)
+- Adaptive (rebalances monthly)
+""")
+
+
 def _tab_specification():
     st.header("🎯 Dynamic ASP Allocation Optimizer")
     st.subheader("Prescriptive Analytics Demo for Telco Field Services")
@@ -1357,7 +1409,7 @@ def _tab_scenarios(settings):
                     alloc = {}
                     for asp in asps:
                         prop = max(scores_p[asp], 1) ** 2 / score_total
-                        alloc[asp] = max(int(demand * 0.05), int(demand * prop))
+                        alloc[asp] = max(int(demand * 0.10), int(demand * prop))
                     # Normalize to demand
                     t = sum(alloc.values())
                     alloc = {a: int(v / t * demand) for a, v in alloc.items()}
@@ -1488,7 +1540,7 @@ def _scenario_bar(pct: dict, title: str):
     """Small allocation bar for scenario comparison."""
     import plotly.graph_objects as go
     fig = go.Figure()
-    colors_list = ["#90EE90", "#636EFA", "#EF553B"]
+    colors_list = ["#90EE90", "#636EFA", "#EF553B", "#FFA500", "#9467BD"]
     for profile in reversed(["urban", "mountain", "climb"]):
         asps = list(pct.get(profile, {}).keys())
         for idx, asp in enumerate(asps):
