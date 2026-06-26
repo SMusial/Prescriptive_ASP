@@ -1559,48 +1559,66 @@ def _tab_engine_view(settings):
     st.caption("Technical reference for analytics teams.")
 
     st.markdown("""
-<table style="width:100%;border-collapse:collapse;font-size:0.95rem">
+<table style="width:100%;border-collapse:collapse;font-size:0.9rem">
 <tr>
-<th style="padding:10px;text-align:center;width:40px">#</th>
+<th style="padding:10px;text-align:center;width:40px"></th>
 <th style="padding:10px">Capability</th>
 <th style="padding:10px;color:#5dade2">Method in This Demo</th>
 <th style="padding:10px;color:#af7ac5">Production-Grade Methods</th>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center;font-size:2.5rem">📊</td>
-<td style="padding:8px"><b>Business Scorecard</b></td>
-<td style="padding:8px;color:#85c1e9">Weighted scoring (0–100), global normalization, score² allocation</td>
-<td style="padding:8px;color:#d2b4de">Multi-Criteria Decision Analysis (MCDA), Technique for Order of Preference by Similarity (TOPSIS), Analytic Hierarchy Process (AHP), Bayesian decision networks</td>
+<td style="padding:8px;text-align:center;font-size:2.2rem">📊</td>
+<td style="padding:8px"><b>Decision Value Model</b></td>
+<td style="padding:8px;color:#85c1e9">Weighted scoring, normalized KPIs, score-based allocation</td>
+<td style="padding:8px;color:#d2b4de">MCDA, AHP, TOPSIS, utility functions, Bayesian decision networks</td>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center;font-size:2.5rem">🧹</td>
-<td style="padding:8px"><b>Data Confidence</b></td>
-<td style="padding:8px;color:#85c1e9">Empirical Bayes shrinkage + winsorization (P5/P95)</td>
-<td style="padding:8px;color:#d2b4de">Hierarchical Bayesian models, Gaussian Processes (GP), Multiple Imputation by Chained Equations (MICE)</td>
+<td style="padding:8px;text-align:center;font-size:2.2rem">🧹</td>
+<td style="padding:8px"><b>Uncertainty & Data Reliability</b></td>
+<td style="padding:8px;color:#85c1e9">Empirical Bayes shrinkage, winsorization, confidence badges</td>
+<td style="padding:8px;color:#d2b4de">Hierarchical Bayesian models, Gaussian Processes, MICE, calibration, probabilistic modeling</td>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center;font-size:2.5rem">🧠</td>
-<td style="padding:8px"><b>Causal Intelligence</b></td>
-<td style="padding:8px;color:#85c1e9">Task difficulty ratios + SME knowledge deltas</td>
-<td style="padding:8px;color:#d2b4de">Directed Acyclic Graphs (DAG), Propensity Score Matching (PSM), Causal Forests, Difference-in-Differences (DiD)</td>
+<td style="padding:8px;text-align:center;font-size:2.2rem">🧠</td>
+<td style="padding:8px"><b>Causal / Driver Intelligence</b></td>
+<td style="padding:8px;color:#85c1e9">Difficulty ratios, SME deltas, driver explanations</td>
+<td style="padding:8px;color:#d2b4de">DAGs, PSM, DiD, Causal Forests, uplift modeling, synthetic controls</td>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center;font-size:2.5rem">🎯</td>
-<td style="padding:8px"><b>Allocation Engine</b></td>
-<td style="padding:8px;color:#85c1e9">Score²-proportional + winner bonus + constraint clipping</td>
-<td style="padding:8px;color:#d2b4de">Linear Programming (LP), Mixed-Integer Programming (MIP), Robust Optimization (RO)</td>
+<td style="padding:8px;text-align:center;font-size:2.2rem">🎯</td>
+<td style="padding:8px"><b>Prescriptive Optimization</b></td>
+<td style="padding:8px;color:#85c1e9">Score-based allocation, winner bonus, constraint clipping</td>
+<td style="padding:8px;color:#d2b4de">LP, MIP, robust optimization, stochastic optimization, constraint programming</td>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center;font-size:2.5rem">⏱️</td>
-<td style="padding:8px"><b>Dynamic Rebalancing</b></td>
-<td style="padding:8px;color:#85c1e9">Monthly score simulation + 5pp movement cap</td>
-<td style="padding:8px;color:#d2b4de">Contextual Bandits (CB), Reinforcement Learning (RL), Rolling Horizon Optimization (RHO)</td>
+<td style="padding:8px;text-align:center;font-size:2.2rem">⏱️</td>
+<td style="padding:8px"><b>Adaptive Policy / Rebalancing</b></td>
+<td style="padding:8px;color:#85c1e9">Monthly simulation, movement caps</td>
+<td style="padding:8px;color:#d2b4de">Contextual Bandits, RL, Rolling Horizon Optimization, Model Predictive Control</td>
 </tr>
 <tr>
-<td style="padding:8px;text-align:center;font-size:2.5rem">🧪</td>
-<td style="padding:8px"><b>Scenario Simulation</b></td>
-<td style="padding:8px;color:#85c1e9">Priority/constraint override + re-optimization</td>
-<td style="padding:8px;color:#d2b4de">Monte Carlo Simulation (MCS), Stochastic Programming (SP), Digital Twins (DT)</td>
+<td style="padding:8px;text-align:center;font-size:2.2rem">🧪</td>
+<td style="padding:8px"><b>Scenario & Risk Simulation</b></td>
+<td style="padding:8px;color:#85c1e9">Constraint override, what-if re-optimization</td>
+<td style="padding:8px;color:#d2b4de">Monte Carlo, stochastic programming, digital twins, discrete-event simulation, agent-based simulation</td>
+</tr>
+<tr>
+<td style="padding:8px;text-align:center;font-size:2.2rem">💬</td>
+<td style="padding:8px"><b>Decision Explanation</b></td>
+<td style="padding:8px;color:#85c1e9">Template-based explanation, top drivers</td>
+<td style="padding:8px;color:#d2b4de">SHAP, counterfactual explanations, causal explanations, audit-ready narratives</td>
+</tr>
+<tr>
+<td style="padding:8px;text-align:center;font-size:2.2rem">\U0001f6e1\ufe0f</td>
+<td style="padding:8px"><b>Governance & Decision Rights</b></td>
+<td style="padding:8px;color:#85c1e9">Autonomous / Assisted / Restricted thresholds</td>
+<td style="padding:8px;color:#d2b4de">Policy-as-code, model risk management, approval workflows, audit logs, human-in-the-loop</td>
+</tr>
+<tr>
+<td style="padding:8px;text-align:center;font-size:2.2rem">🔁</td>
+<td style="padding:8px"><b>Outcome Learning</b></td>
+<td style="padding:8px;color:#85c1e9">Predicted vs actual comparison, score updates</td>
+<td style="padding:8px;color:#d2b4de">Bayesian updating, online learning, off-policy evaluation, experimentation framework</td>
 </tr>
 </table>
 """, unsafe_allow_html=True)
