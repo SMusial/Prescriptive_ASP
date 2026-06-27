@@ -46,7 +46,6 @@ def main():
         _tab_setup(settings)
 
     if "df" not in st.session_state:
-        st.info("Generate data in the Setup tab to begin.")
         return
 
     # Always compute metrics from current data (ensures downstream consistency)
@@ -102,50 +101,62 @@ of performance, cost, safety or capacity. This is inefficient and risky.
 
     st.info('> *"How should we split field-service task volume across ASPs, considering cost, safety, SLA, NPS, repeat visits, capacity, weather, certifications, budget, data quality, and SME knowledge?"*')
 
-    st.subheader("Three Service Profiles")
-    c1, c2, c3 = st.columns(3)
-    c1.success("**🏙️ Urban**\nStandard city tasks\n\n*Challenge: Volume, cost, SLA*")
-    c2.warning("**⛰️ Mountain**\nDifficult travel tasks\n\n*Challenge: Weather, access, delays*")
-    c3.error("**🧗 Climb**\nRisky climbing work\n\n*Challenge: Safety, certifications*")
+    if "use_case_step" not in st.session_state:
+        st.session_state["use_case_step"] = 0
 
-    st.subheader("Baseline Environment")
-    st.markdown("**9 ASPs across 3 profiles — today each gets 33% (equal split):**")
+    uc_step = st.session_state["use_case_step"]
 
-    import plotly.graph_objects as go
-    # Equal split baseline visualization
-    fig = go.Figure()
-    colors = ["#90EE90", "#636EFA", "#EF553B"]
-    profiles_data = {
-        "Urban": ["CityConnect", "UrbanLink", "StreetNet"],
-        "Mountain": ["AlpineReach", "SummitField", "AlpinGmbH"],
-        "Climb": ["SkyClimb", "TowerPro", "VerticalWorks"],
-    }
-    for profile in reversed(["Urban", "Mountain", "Climb"]):
-        for idx, asp in enumerate(profiles_data[profile]):
-            fig.add_trace(go.Bar(name=asp, x=[33.3], y=[profile], orientation="h",
-                                 marker_color=colors[idx], text=[f"{asp}: 33%"],
-                                 textposition="inside", textfont=dict(color="black"),
-                                 showlegend=(profile == "Urban")))
-    fig.update_layout(barmode="stack", height=200, title="Today: Equal Split (no optimization)",
-                      margin=dict(l=20, r=20, t=40, b=10), xaxis_title="Share (%)",
-                      legend=dict(orientation="h", y=-0.3))
-    st.plotly_chart(fig, use_container_width=True)
+    if uc_step >= 1:
+        st.subheader("Three Service Profiles")
+        c1, c2, c3 = st.columns(3)
+        c1.success("**🏙️ Urban**\nStandard city tasks\n\n*Challenge: Volume, cost, SLA*")
+        c2.warning("**⛰️ Mountain**\nDifficult travel tasks\n\n*Challenge: Weather, access, delays*")
+        c3.error("**🧗 Climb**\nRisky climbing work\n\n*Challenge: Safety, certifications*")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""**What's wrong with equal split?**
+    if uc_step >= 2:
+        st.subheader("Baseline Environment")
+        st.markdown("**9 ASPs across 3 profiles — today each gets 33% (equal split):**")
+
+        import plotly.graph_objects as go
+        fig = go.Figure()
+        colors = ["#90EE90", "#636EFA", "#EF553B"]
+        profiles_data = {
+            "Urban": ["CityConnect", "UrbanLink", "StreetNet"],
+            "Mountain": ["AlpineReach", "SummitField", "AlpinGmbH"],
+            "Climb": ["SkyClimb", "TowerPro", "VerticalWorks"],
+        }
+        for profile in reversed(["Urban", "Mountain", "Climb"]):
+            for idx, asp in enumerate(profiles_data[profile]):
+                fig.add_trace(go.Bar(name=asp, x=[33.3], y=[profile], orientation="h",
+                                     marker_color=colors[idx], text=[f"{asp}: 33%"],
+                                     textposition="inside", textfont=dict(color="black"),
+                                     showlegend=(profile == "Urban")))
+        fig.update_layout(barmode="stack", height=200, title="Today: Equal Split (no optimization)",
+                          margin=dict(l=20, r=20, t=40, b=10), xaxis_title="Share (%)",
+                          legend=dict(orientation="h", y=-0.3))
+        st.plotly_chart(fig, use_container_width=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""**What's wrong with equal split?**
 - Ignores ASP performance differences
 - Wastes budget on expensive underperformers
 - Doesn't protect SLA or safety
 - Can't adapt to changing conditions
 """)
-    with col2:
-        st.markdown("""**What prescriptive analytics delivers:**
+        with col2:
+            st.markdown("""**What prescriptive analytics delivers:**
 - Score-based allocation (best ASP gets more)
 - Constraint-aware (safety, capacity, budget)
 - Causal context (unfair penalties removed)
 - Adaptive (rebalances monthly)
 """)
+
+    uc_labels = ["Show Service Profiles", "Show Baseline & Comparison", "All shown ✓"]
+    if uc_step < 2:
+        if st.button(f"➡️ {uc_labels[uc_step]}", key="use_case_next"):
+            st.session_state["use_case_step"] = uc_step + 1
+            st.rerun()
 
 
 def _tab_specification():
@@ -165,9 +176,7 @@ def _tab_specification():
         with col1:
             st.markdown("#### 👥 Target Audience")
             st.markdown("""
-- Business executives & operations managers
-- Product managers
-- Anybody interested in contemporary analytics capabilities
+Anybody interested in applying contemporary analytics capabilities — regardless of position or business unit.
 """)
         with col2:
             st.markdown("#### 🔄 Today vs. Tomorrow")
