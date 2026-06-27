@@ -239,6 +239,11 @@ Anybody interested in applying contemporary analytics capabilities — regardles
             st.rerun()
 
 
+def _tab_summary(text: str):
+    """Render a centered amber italic summary at the end of a tab."""
+    st.markdown(f'<div style="text-align:center;padding:20px"><span style="color:#FF8C00;font-style:italic;font-size:1.1rem">"{text}"</span></div>', unsafe_allow_html=True)
+
+
 def _tab_setup(settings):
     st.header("Demo Setup")
     st.write("Generate a synthetic telco field-service world.")
@@ -334,6 +339,8 @@ def _tab_setup(settings):
 
         with st.expander("📋 Sample Generated Data (all variables)"):
             st.dataframe(df.head(20), use_container_width=True, hide_index=True)
+
+        _tab_summary("Synthetic data generated — ready for confidence processing and scoring.")
 
 
 def _tab_data_confidence():
@@ -440,6 +447,8 @@ def _tab_data_confidence():
 2–5% = "Medium", >5% = "Low sparsity" (enough events to be statistically meaningful).
 """)
 
+    _tab_summary("Imperfect data is now decision-ready. Bayesian smoothing prevents overreaction to noise.")
+
 
 def _tab_priorities(settings):
     st.header("Business Priorities")
@@ -504,6 +513,8 @@ def _tab_priorities(settings):
 - Treat safety for Climb as a hard constraint
 - Store priority templates (Cost Mode, SLA Mode, Safety Mode)
 """)
+
+    _tab_summary("The best ASP changes depending on what the business prioritises today.")
 
 
 def _tab_causal():
@@ -598,6 +609,8 @@ def _tab_causal():
 - Store SME observations as structured assumptions with expiry and confidence
 """)
 
+    _tab_summary("Raw KPI rankings can mislead. Causal context and SME knowledge reveal the true picture.")
+
 
 def _tab_constraints(settings):
     st.header("Operational Constraints")
@@ -652,7 +665,7 @@ def _tab_constraints(settings):
         }
 
         weather_reasons = {
-            "urban": "flood risk",
+            "urban": "flood risk in 2 districts",
             "mountain": "snow & thunderstorms",
             "climb": "wind, thunderstorm, ice, high-pressure chimney risk",
         }
@@ -676,6 +689,7 @@ def _tab_constraints(settings):
                 rework_caps = {"Urban": cs['max_rework'], "Mountain": 10, "Climb": 5}
                 lines.append(f"💰 Budget: \u20ac{int(cs['budget'] * info['demand'] / sum(demands.values())):,}")
                 lines.append(f"📊 Max share: {int(cs['max_share']*100)}%")
+                lines.append(f"📊 Min share: 15%")
                 lines.append(f"🔄 Rework cap: {rework_caps[profile]}%")
                 for t in lines:
                     st.write(t)
@@ -704,6 +718,8 @@ def _tab_constraints(settings):
 - Explain infeasibility clearly
 - Keep full audit trail
 """)
+
+    _tab_summary("Constraints define what is allowed. The engine finds the best allocation within these boundaries.")
 
 
 def _generate_weather_forecast(planning_weeks: int, seed: int) -> dict:
@@ -1511,6 +1527,13 @@ def _tab_scenarios(settings):
         if abs(k["Avg Cost/Task"] - base_kpis["Avg Cost/Task"]) > 10:
             kpi_penalty += 5
     resilience = max(15, min(85, int(feasible_count * 25 + 30 - kpi_penalty)))
+    # Scenario-specific resilience ranges
+    if selected == "budget":
+        resilience = max(60, min(80, resilience))
+    elif selected == "demand":
+        resilience = max(80, min(90, resilience))
+    elif selected == "5g":
+        resilience = max(85, min(95, resilience))
     res_color = "#00CC96" if resilience >= 65 else "#FFA500" if resilience >= 40 else "#EF553B"
 
     st.markdown(f"""
@@ -1572,7 +1595,7 @@ Total: \u20ac{rl['result']['total_cost']:,.0f}
 
     # Closing
     st.divider()
-    st.markdown('> *"The goal is not only the best allocation for today — it\'s an allocation strategy that remains safe, feasible and valuable under changing conditions."*')
+    _tab_summary("The goal is not only the best allocation for today — it is a strategy that remains safe, feasible and valuable under changing conditions.")
 
 
 def _scenario_bar(pct: dict, title: str):
@@ -1663,7 +1686,7 @@ def _tab_engine_view(settings):
 """, unsafe_allow_html=True)
 
     st.divider()
-    st.markdown('> *"Today we often report what happened. With prescriptive analytics, we recommend what to do next. On a continual basis."*')
+    _tab_summary("Today we often report what happened. With prescriptive analytics, we recommend what to do next. On a continual basis.")
 
 
 if __name__ == "__main__":

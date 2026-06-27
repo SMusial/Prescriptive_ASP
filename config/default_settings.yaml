@@ -22,7 +22,7 @@ weights:
 constraints:
   budget: 350000
   max_share: 0.60
-  min_share: 0.10
+  min_share: 0.15
   climb_safety_threshold: 90
   weather_impact: true
   sme_adjustments: true
