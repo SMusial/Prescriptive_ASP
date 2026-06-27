@@ -101,6 +101,8 @@ of performance, cost, safety or capacity. This is inefficient and risky.
 
     st.info('> *"How should we split field-service task volume across ASPs, considering cost, safety, SLA, NPS, repeat visits, capacity, weather, certifications, budget, data quality, and SME knowledge?"*')
 
+    st.markdown("All ASPs operate across the entire country with overlapping geography — the challenge is not *where* they work, but *how much* each should receive.")
+
     if "use_case_step" not in st.session_state:
         st.session_state["use_case_step"] = 0
 
@@ -308,14 +310,16 @@ def _tab_setup(settings):
         st.markdown("---")
         h_col, f_col = st.columns(2)
         with h_col:
-            st.markdown("**📊 Historical Data Generated**")
+            st.markdown("""<div style="background:#e8f4fd;padding:16px;border-radius:8px;color:black">
+<b>📊 Historical Data Generated</b></div>""", unsafe_allow_html=True)
             st.metric("Total Historical Tasks", f"{len(df):,}")
             c1, c2, c3 = st.columns(3)
             c1.metric("Urban", f"{len(df[df['profile']=='urban']):,}")
             c2.metric("Mountain", f"{len(df[df['profile']=='mountain']):,}")
             c3.metric("Climb", f"{len(df[df['profile']=='climb']):,}")
         with f_col:
-            st.markdown("**🔮 Forecasted Planning Period**")
+            st.markdown("""<div style="background:#d4edda;padding:16px;border-radius:8px;color:black">
+<b>🔮 Forecasted Planning Period</b></div>""", unsafe_allow_html=True)
             st.metric("Predicted Tasks", f"{fv:,}")
             c1, c2, c3 = st.columns(3)
             c1.metric("Urban", f"{demands['urban']:,}")
@@ -347,6 +351,12 @@ def _tab_data_confidence():
 
     metrics = smooth_metrics(df)
     st.session_state["metrics"] = metrics
+
+    if st.button("Show Data Quality Improvements", key="btn_dq"):
+        st.session_state["show_dq"] = True
+
+    if not st.session_state.get("show_dq"):
+        return
 
     import plotly.graph_objects as go
 
@@ -459,8 +469,9 @@ def _tab_priorities(settings):
         scored = compute_scores(st.session_state["metrics"], weights)
         st.session_state["scored"] = scored
         st.session_state["weights"] = weights
+        st.session_state["show_scores"] = True
 
-    if "scored" in st.session_state:
+    if st.session_state.get("show_scores") and "scored" in st.session_state:
         scored = st.session_state["scored"]
         for profile in ["urban", "mountain", "climb"]:
             st.subheader(f"{profile.title()} Profile")
@@ -504,40 +515,9 @@ def _tab_causal():
     scored = st.session_state.get("scored")
     ctx_scored = compute_raw_vs_adjusted_scores(ctx, weights, scored)
     observations = get_active_observations()
-
-    # STEP 1: Data-based causal adjustment on overall score
-    st.subheader("Step 1: Overall Score Adjusted for Task Difficulty")
-    st.markdown("Raw overall score vs causally-adjusted score (accounting for complexity and emergency share):")
-
-    import plotly.graph_objects as go
-    fig1 = go.Figure()
-    fig1.add_trace(go.Bar(name="Raw Overall Score", x=ctx_scored["asp"], y=ctx_scored["raw_score"], marker_color="#EF553B"))
-    fig1.add_trace(go.Bar(name="Adjusted (Data)", x=ctx_scored["asp"], y=ctx_scored["adjusted_score_data"], marker_color="#636EFA"))
-    fig1.update_layout(barmode="group", height=300, margin=dict(l=20, r=20, t=30, b=20),
-                       yaxis_title="Overall Business Score (0-100)")
-    st.plotly_chart(fig1, use_container_width=True)
-
-    st.markdown("**Task Difficulty Context (from data)**")
-    st.dataframe(ctx_scored[["asp", "complexity_ratio", "travel_ratio", "weather_ratio", "access_ratio", "causal_adjustment"]],
-                 hide_index=True, use_container_width=True)
-
-    hardest = ctx_scored.loc[ctx_scored["avg_complexity"].idxmax()]
-    st.info(f"🔍 **Key Finding:** {hardest['asp']} handles the most complex tasks "
-            f"(complexity {hardest['complexity_ratio']:.2f}×, travel {hardest['travel_ratio']:.2f}×, "
-            f"weather {hardest['weather_ratio']:.2f}×, access {hardest['access_ratio']:.2f}×) — "
-            f"raw score {hardest['raw_score']:.1f} → adjusted to {hardest['adjusted_score_data']:.1f} (+{hardest['causal_adjustment']:.1f} pts).")
-
-    st.divider()
-
-    # STEP 2: SME observations + final adjustment
-    st.subheader("Step 2: SME Observations")
-    for obs in observations:
-        if obs["profile"] == "mountain":
-            st.warning(f"**{obs['source_role']}:** {obs['business_observation']}")
-
     ctx_final = apply_sme_adjustment(ctx_scored, observations)
 
-    # Update scored dataframe: apply causal + SME adjustments as deltas to Mountain ASPs
+    # Update scored
     if "scored" in st.session_state:
         scored_updated = st.session_state["scored"].copy()
         for _, row in ctx_final.iterrows():
@@ -547,40 +527,63 @@ def _tab_causal():
             scored_updated.loc[mask, "business_score"] = max(0, min(100, current + total_adjustment))
         st.session_state["scored"] = scored_updated
 
-    st.subheader("Overall Score: Raw → Data-Adjusted → Data+SME")
-    fig2 = go.Figure()
-    fig2.add_trace(go.Bar(name="Raw Score", x=ctx_final["asp"], y=ctx_final["raw_score"], marker_color="#EF553B"))
-    fig2.add_trace(go.Bar(name="Adjusted (Data)", x=ctx_final["asp"], y=ctx_final["adjusted_score_data"], marker_color="#636EFA"))
-    fig2.add_trace(go.Bar(name="Final (Data + SME)", x=ctx_final["asp"], y=ctx_final["final_score"], marker_color="#00CC96"))
-    fig2.update_layout(barmode="group", height=300, margin=dict(l=20, r=20, t=30, b=20),
-                       yaxis_title="Overall Business Score (0-100)")
-    st.plotly_chart(fig2, use_container_width=True)
+    import plotly.graph_objects as go
 
-    st.divider()
+    if "causal_step" not in st.session_state:
+        st.session_state["causal_step"] = 0
+    cs_step = st.session_state["causal_step"]
 
-    # Conclusions & Recommendations
-    st.subheader("Conclusions & Recommendations")
-    decision = naive_vs_causal_decision(ctx_final)
+    # Always show raw score
+    st.subheader("Raw Overall Score (Mountain ASPs)")
+    fig0 = go.Figure()
+    fig0.add_trace(go.Bar(name="Raw Score", x=ctx_scored["asp"], y=ctx_scored["raw_score"], marker_color="#EF553B"))
+    fig0.update_layout(height=250, margin=dict(l=20, r=20, t=20, b=20), yaxis_title="Score (0-100)")
+    st.plotly_chart(fig0, use_container_width=True)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.error(f"**❌ Naive decision (raw data only):**\n\n{decision['naive_decision']}")
-    with col2:
-        st.success(f"**✅ Informed decision (data + causal + SME):**\n\n{decision['causal_decision']}")
+    if cs_step >= 1:
+        st.divider()
+        st.subheader("Step 1: Overall Score Adjusted for Task Difficulty")
+        fig1 = go.Figure()
+        fig1.add_trace(go.Bar(name="Raw Score", x=ctx_scored["asp"], y=ctx_scored["raw_score"], marker_color="#EF553B"))
+        fig1.add_trace(go.Bar(name="Adjusted (Data)", x=ctx_scored["asp"], y=ctx_scored["adjusted_score_data"], marker_color="#636EFA"))
+        fig1.update_layout(barmode="group", height=280, margin=dict(l=20, r=20, t=20, b=20), yaxis_title="Score")
+        st.plotly_chart(fig1, use_container_width=True)
+        st.dataframe(ctx_scored[["asp", "complexity_ratio", "travel_ratio", "weather_ratio", "access_ratio", "causal_adjustment"]],
+                     hide_index=True, use_container_width=True)
 
-    raw_ranking = ctx_final.sort_values("raw_score", ascending=False)["asp"].tolist()
-    adj_ranking = ctx_final.sort_values("final_score", ascending=False)["asp"].tolist()
-    best_final = ctx_final.loc[ctx_final["final_score"].idxmax()]
-    hardest_asp = ctx_final.loc[ctx_final["avg_complexity"].idxmax()]
+    if cs_step >= 2:
+        st.divider()
+        st.subheader("Step 2: SME Observations")
+        for obs in observations:
+            if obs["profile"] == "mountain":
+                st.warning(f"**{obs['source_role']}:** {obs['business_observation']}")
+        fig2 = go.Figure()
+        fig2.add_trace(go.Bar(name="Raw", x=ctx_final["asp"], y=ctx_final["raw_score"], marker_color="#EF553B"))
+        fig2.add_trace(go.Bar(name="Data-Adjusted", x=ctx_final["asp"], y=ctx_final["adjusted_score_data"], marker_color="#636EFA"))
+        fig2.add_trace(go.Bar(name="Final (Data+SME)", x=ctx_final["asp"], y=ctx_final["final_score"], marker_color="#00CC96"))
+        fig2.update_layout(barmode="group", height=280, margin=dict(l=20, r=20, t=20, b=20), yaxis_title="Score")
+        st.plotly_chart(fig2, use_container_width=True)
 
-    summary_points = [
-        f"- **{hardest_asp['asp']}** receives hardest tasks (complexity: {hardest_asp['avg_complexity']:.2f}, emergency: {hardest_asp['emergency_share']:.0f}%)",
-        f"- Raw score ranking: {' > '.join(raw_ranking)}",
-        f"- Final ranking (data+SME): {' > '.join(adj_ranking)}",
-        f"- {'Rankings changed!' if decision['ranking_changed'] else 'Rankings stable, but gaps shifted significantly'}",
-        f"- **Recommendation:** {best_final['asp']} is effectively strongest (final score: {best_final['final_score']:.1f}). Protect ASPs handling harder work from unfair volume cuts.",
-    ]
-    st.markdown("\n".join(summary_points))
+    if cs_step >= 3:
+        st.divider()
+        st.subheader("Conclusions & Recommendations")
+        decision = naive_vs_causal_decision(ctx_final)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.error(f"**❌ Naive decision:**\n\n{decision['naive_decision']}")
+        with col2:
+            st.success(f"**✅ Informed decision:**\n\n{decision['causal_decision']}")
+        raw_ranking = ctx_final.sort_values("raw_score", ascending=False)["asp"].tolist()
+        adj_ranking = ctx_final.sort_values("final_score", ascending=False)["asp"].tolist()
+        st.markdown(f"- Raw ranking: {' > '.join(raw_ranking)}")
+        st.markdown(f"- Final ranking: {' > '.join(adj_ranking)}")
+        st.markdown(f"- {'Rankings changed!' if decision['ranking_changed'] else 'Rankings stable, gaps shifted.'}")
+
+    labels = ["Show Data Adjustment", "Show SME Observations", "Show Conclusions", "Complete ✓"]
+    if cs_step < 3:
+        if st.button(f"➡️ {labels[cs_step]}", key="causal_next"):
+            st.session_state["causal_step"] = cs_step + 1
+            st.rerun()
 
     with st.expander("Technical Details"):
         st.markdown("""
@@ -664,16 +667,15 @@ def _tab_constraints(settings):
                 reduction = wf.get(info["profile_key"], 0)
                 if cs["weather_on"] and reduction > 0:
                     lines.append(f"🌧️ Weather: −{int(reduction*100)}% capacity ({weather_reasons[info['profile_key']]})")
-                if cs["cert_on"] and profile == "Climb":
-                    lines.append("🎓 Uncertified ASPs → 0 tasks")
-                if cs["cert_on"] and cs.get("workforce"):
-                    asps = [a for a in cs["workforce"] if a.startswith(profile)]
-                    for asp in sorted(asps):
-                        w = cs["workforce"][asp]
-                        lines.append(f"👷 {asp.split(' ')[-1]}: {w['senior']}% Sr / {w['regular']}% Reg / {w['junior']}% Jr")
-                lines.append(f"💰 Budget: €{int(cs['budget'] * info['demand'] / sum(demands.values())):,}")
+                if cs["cert_on"]:
+                    skill_req = {"Urban": "min 10% Sr / min 60% Reg / max 30% Jr",
+                                 "Mountain": "min 30% Sr / min 60% Reg / max 10% Jr",
+                                 "Climb": "min 50% Sr / min 40% Reg / max 10% Jr"}
+                    lines.append(f"🎓 Skills: {skill_req[profile]}")
+                rework_caps = {"Urban": cs['max_rework'], "Mountain": 10, "Climb": 5}
+                lines.append(f"💰 Budget: \u20ac{int(cs['budget'] * info['demand'] / sum(demands.values())):,}")
                 lines.append(f"📊 Max share: {int(cs['max_share']*100)}%")
-                lines.append(f"🔄 Rework cap: {cs['max_rework']}%")
+                lines.append(f"🔄 Rework cap: {rework_caps[profile]}%")
                 for t in lines:
                     st.write(t)
 
@@ -804,12 +806,19 @@ def _tab_recommendation(settings):
     else:
         st.success("✅ Feasible allocation found within all constraints.")
 
-    # ── Overall Chart ──
-    st.subheader("Recommended Task Split (All Profiles)")
-    st.plotly_chart(allocation_bar_chart(pct, result["allocations"]), use_container_width=True)
+    # ── Overall Chart (on click) ──
+    if st.button("📊 Generate Recommended Task Split", type="primary", key="btn_gen_split"):
+        st.session_state["show_rec_split"] = True
 
-    # Overall KPI impact aggregated across all profiles
-    st.subheader("Expected KPI Impact (vs equal 1/3 split)")
+    if st.session_state.get("show_rec_split"):
+        st.subheader("Recommended Task Split (All Profiles)")
+        st.plotly_chart(allocation_bar_chart(pct, result["allocations"]), use_container_width=True)
+
+        if st.button("📈 Show Expected KPI Impact", key="btn_show_kpi_impact"):
+            st.session_state["show_rec_kpi"] = True
+
+    if st.session_state.get("show_rec_kpi"):
+        st.subheader("Expected KPI Impact (vs equal 1/3 split)")
     kpi_labels = ["Avg Cost/Task", "SLA %", "NPS", "Repeat %"]
     equal_alloc_all = {}
     for profile in ["urban", "mountain", "climb"]:
@@ -877,11 +886,6 @@ def _tab_recommendation(settings):
                     st.write(f"- Ineligible (certification): {', '.join(inelig)}")
                 else:
                     st.write("- All Climb ASPs certified ✓")
-
-    # ── Final Message ──
-    st.markdown("---")
-    st.markdown('> *"Prescriptive analytics is not just one algorithm. It combines business priorities, imperfect data, '
-                'SME knowledge, causal reasoning, and constraints to recommend what the company should do next."*')
 
 
 def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
@@ -1116,15 +1120,20 @@ def _tab_rebalancing(settings):
     base_repeat_map = sim["base_repeat_map"]
     profiles = ["urban", "mountain", "climb"]
     # --- UI ---
-    # Controls
     total_tasks_pm = sum(int(v) for v in demands.values())
-    ph_journey = st.empty()
-    ph_journey.markdown("""
+
+    st.markdown("""
 **Our journey to the future:**
 - **Year 1 (M6–M10):** CityConnect/AlpineReach/SkyClimb capped at 30% due to capacity constraints
 - **Year 2 (M18–M21):** Flood hits Urban & Climb — SLA and NPS collapse, significant cost increase. Mountain not affected.
 - **Year 3 (M25+):** Network rollout → First ASP exits, new ASPs start delivering
 """)
+
+    if st.button("🎬 Start Simulation", type="primary", key="btn_start_rebal"):
+        st.session_state["show_rebal"] = True
+
+    if not st.session_state.get("show_rebal"):
+        return
 
     col_play, col_reset = st.columns([1, 1])
     with col_play:
@@ -1133,6 +1142,7 @@ def _tab_rebalancing(settings):
         reset = st.button("⏮️ Reset", key="reset_rebal")
     month_slider = st.slider("Month", 1, 36, 1, key="rebal_m36")
 
+    ph_journey = st.empty()
     # ASP name maps for color consistency
     asp_names = {"urban": ["CityConnect", "UrbanLink", "StreetNet"],
                  "mountain": ["AlpineReach", "SummitField", "AlpinGmbH"],
@@ -1652,7 +1662,7 @@ def _tab_engine_view(settings):
 """, unsafe_allow_html=True)
 
     st.divider()
-    st.markdown('> *"Today we often report what happened. With prescriptive analytics, we recommend what to do next."*')
+    st.markdown('> *"Today we often report what happened. With prescriptive analytics, we recommend what to do next. On a continual basis."*')
 
 
 if __name__ == "__main__":
