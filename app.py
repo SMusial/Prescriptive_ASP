@@ -911,7 +911,7 @@ def _tab_recommendation(settings):
                 else:
                     st.write("- All Climb ASPs certified ✓")
 
-    if st.session_state.get("show_rec_kpi"):
+    if st.session_state.get("show_rec_split"):
         _tab_summary("Not just a ranking. A concrete, feasible allocation with clear reasoning.")
 
 
@@ -1342,6 +1342,9 @@ def _tab_rebalancing(settings):
 
 **Production:** Rolling optimization, Bayesian updating, contextual bandits.
 """)
+
+    if st.session_state.get("show_rebal"):
+        _tab_summary("Allocation is not static. It adapts monthly as performance, capacity, and conditions evolve.")
 
 
 def _tab_scenarios(settings):
