@@ -96,7 +96,7 @@ def _tab_use_case():
     st.header("📋 Use Case: Field-Service ASP Allocation")
     st.markdown("""
 **Problem Statement:** A telco company outsources field-service tasks (installations, repairs, climbing work)
-to multiple ASPs (Alternate Service Providers). Today, task volume is split **equally** — 33% per ASP regardless
+to multiple ASPs (Authorized Service Providers). Today, task volume is split **equally** — 33% per ASP regardless
 of performance, cost, safety or capacity. This is inefficient and risky.
 """)
 
@@ -154,17 +154,24 @@ def _tab_specification():
 
     st.info('> **Generic decision problem:** Given uncertain demand, multiple execution options, imperfect historical performance data, and competing business objectives — decide how to allocate work across available resources in a way that maximizes risk-adjusted business value.')
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("#### 👥 Target Audience")
-        st.markdown("""
+    # Progressive reveal with session state
+    if "demo_scope_step" not in st.session_state:
+        st.session_state["demo_scope_step"] = 0
+
+    step = st.session_state["demo_scope_step"]
+
+    if step >= 1:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### 👥 Target Audience")
+            st.markdown("""
 - Business executives & operations managers
 - Product managers
 - Anybody interested in contemporary analytics capabilities
 """)
-    with col2:
-        st.markdown("#### 🔄 Today vs. Tomorrow")
-        st.markdown("""
+        with col2:
+            st.markdown("#### 🔄 Today vs. Tomorrow")
+            st.markdown("""
 | Today | With Prescriptive Analytics |
 |-------|---------------------------|
 | Static rules & equal splits | Dynamic optimization |
@@ -173,46 +180,52 @@ def _tab_specification():
 | One-time decisions | Adaptive rebalancing |
 """)
 
-    st.divider()
-
-    st.markdown("#### 🧠 Decision Intelligence Process Flow")
-    capabilities = [
-        ("📊", "Decision Value Model", "Score options against business objectives", "#d4edda"),
-        ("🧹", "Uncertainty & Data Reliability", "Make decisions despite imperfect data", "#cce5ff"),
-        ("🧠", "Causal / Driver Intelligence", "Understand why, not just what", "#fff3cd"),
-        ("🎯", "Prescriptive Optimization", "Find the best feasible allocation", "#e2d9f3"),
-        ("⏱️", "Adaptive Rebalancing", "Adjust decisions as reality changes", "#f8d7da"),
-        ("🧪", "Scenario & Risk Simulation", "Test resilience before committing", "#e8f8f5"),
-        ("💬", "Decision Explanation", "Justify every recommendation", "#fef9e7"),
-        ("🛡️", "Governance & Decision Rights", "Control autonomy vs. human approval", "#f2f3f4"),
-        ("🔁", "Outcome Learning", "Learn from predicted vs. actual", "#fae5d3"),
-    ]
-    # Display in 3 rows of 3
-    for row_start in range(0, 9, 3):
-        cols = st.columns(3)
-        for col, (icon, name, desc, color) in zip(cols, capabilities[row_start:row_start + 3]):
-            col.markdown(f"""<div style="background:{color};padding:12px;border-radius:8px;text-align:center;height:120px;color:black">
+    if step >= 2:
+        st.divider()
+        st.markdown("#### 🧠 Decision Intelligence Process Flow")
+        capabilities = [
+            ("📊", "Decision Value Model", "Score options against business objectives", "#d4edda"),
+            ("🧹", "Uncertainty & Data Reliability", "Make decisions despite imperfect data", "#cce5ff"),
+            ("🧠", "Causal / Driver Intelligence", "Understand why, not just what", "#fff3cd"),
+            ("🎯", "Prescriptive Optimization", "Find the best feasible allocation", "#e2d9f3"),
+            ("⏱️", "Adaptive Rebalancing", "Adjust decisions as reality changes", "#f8d7da"),
+            ("🧪", "Scenario & Risk Simulation", "Test resilience before committing", "#e8f8f5"),
+            ("💬", "Decision Explanation", "Justify every recommendation", "#fef9e7"),
+            ("🛡️", "Governance & Decision Rights", "Control autonomy vs. human approval", "#f2f3f4"),
+            ("🔁", "Outcome Learning", "Learn from predicted vs. actual", "#fae5d3"),
+        ]
+        for row_start in range(0, 9, 3):
+            cols = st.columns(3, gap="medium")
+            for col, (icon, name, desc, color) in zip(cols, capabilities[row_start:row_start + 3]):
+                col.markdown(f"""<div style="background:{color};padding:14px;border-radius:8px;text-align:center;height:130px;color:black;margin-bottom:12px">
 <span style="font-size:1.5rem">{icon}</span><br><b>{name}</b><br><small>{desc}</small></div>""", unsafe_allow_html=True)
 
-    st.divider()
-
-    col_is, col_not = st.columns(2)
-    with col_is:
-        st.markdown("""#### ✅ This demo IS about
+    if step >= 3:
+        st.divider()
+        col_is, col_not = st.columns(2)
+        with col_is:
+            st.markdown("""#### ✅ This demo IS about
 - Prescriptive analytics **capabilities** for business decisions
 - How to combine data, priorities, causal context & constraints
 - Demonstrating **what to do next** (not just what happened)
 - Showing trade-offs, resilience & scenario planning
 - Business-friendly language & visual decision support
 """)
-    with col_not:
-        st.markdown("""#### ❌ This demo is NOT about
+        with col_not:
+            st.markdown("""#### ❌ This demo is NOT about
 - A specific real-world use case or real data
 - Data science implementation details or model tuning
 - Production-grade ML pipeline architecture
 - Real-time system integration or APIs
 - Academic statistical rigor or peer-reviewed methods
 """)
+
+    # Next button
+    labels = ["Show Audience & Context", "Show Process Flow", "Show Scope (IS / IS NOT)", "All shown ✓"]
+    if step < 3:
+        if st.button(f"➡️ {labels[step]}", key="demo_scope_next"):
+            st.session_state["demo_scope_step"] = step + 1
+            st.rerun()
 
 
 def _tab_setup(settings):
