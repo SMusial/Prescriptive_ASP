@@ -514,7 +514,8 @@ def _tab_priorities(settings):
 - Store priority templates (Cost Mode, SLA Mode, Safety Mode)
 """)
 
-    _tab_summary("The best ASP changes depending on what the business prioritises today.")
+    if st.session_state.get("show_scores"):
+        _tab_summary("The best ASP changes depending on what the business prioritises today.")
 
 
 def _tab_causal():
@@ -609,7 +610,8 @@ def _tab_causal():
 - Store SME observations as structured assumptions with expiry and confidence
 """)
 
-    _tab_summary("Raw KPI rankings can mislead. Causal context and SME knowledge reveal the true picture.")
+    if cs_step >= 3:
+        _tab_summary("Raw KPI rankings can mislead. Causal context and SME knowledge reveal the true picture.")
 
 
 def _tab_constraints(settings):
@@ -981,7 +983,7 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
             asps = active_asps[profile]
             scores_p = {a: month_score.get(a, 30) for a in asps}
             score_total = sum(max(s, 1) ** 2 for s in scores_p.values())
-            raw = {asp: max(5, min(max_share_pct, max(scores_p[asp], 1) ** 2 / score_total * 100)) for asp in asps}
+            raw = {asp: max(15, min(max_share_pct, max(scores_p[asp], 1) ** 2 / score_total * 100)) for asp in asps}
             t = sum(raw.values())
             raw = {a: raw[a] / t * 100 for a in asps}
             for asp in asps:
@@ -1442,9 +1444,9 @@ def _tab_scenarios(settings):
                 # Override PROFILES for this run by adding to demands_sc via custom optimizer call
                 from src.data_generator import PROFILES as _P
                 profiles_5g = {
-                    "urban": {"asps": list(_P["urban"]["asps"]) + ["Urban 5G-Ops"]},
-                    "mountain": {"asps": list(_P["mountain"]["asps"]) + ["Mountain 5G-Alpha", "Mountain 5G-Beta"]},
-                    "climb": {"asps": list(_P["climb"]["asps"])},
+                    "urban": {"asps": ["UrbanLink", "StreetNet", "Urban 5G-Ops"]},
+                    "mountain": {"asps": ["SummitField", "AlpinGmbH", "Mountain 5G-Alpha", "Mountain 5G-Beta"]},
+                    "climb": {"asps": ["TowerPro", "VerticalWorks"]},
                 }
                 # Direct optimizer call with custom profiles
                 settings_sc["constraints"] = constraints_sc_settings
@@ -1464,7 +1466,7 @@ def _tab_scenarios(settings):
                     alloc = {}
                     for asp in asps:
                         prop = max(scores_p[asp], 1) ** 2 / score_total
-                        alloc[asp] = max(int(demand * 0.10), int(demand * prop))
+                        alloc[asp] = max(int(demand * 0.15), int(demand * prop))
                     # Normalize to demand
                     t = sum(alloc.values())
                     alloc = {a: int(v / t * demand) for a, v in alloc.items()}

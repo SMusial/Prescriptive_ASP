@@ -51,7 +51,7 @@ SME_OBSERVATIONS = [
         "source_role": "Regional Expert",
         "profile": "mountain",
         "asp": "AlpinGmbH",
-        "business_observation": "Flood risk alert for 2 districts in the upcoming planning period — AlpinGmbH has the highest task concentration in those areas, expect significant delivery delays.",
+        "business_observation": "AlpinGmbH delivery performance was significantly affected by flooding in 2 districts last quarter — road closures and site access issues caused major delays.",
         "confidence_level": "High",
         "valid_from": "2026-05-01",
         "valid_until": "2026-10-01",
