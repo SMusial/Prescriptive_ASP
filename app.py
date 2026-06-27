@@ -31,7 +31,7 @@ def main():
 
     tabs = st.tabs(["Demo Scope", "Use Case", "Setup", "Data Confidence", "Business Priorities",
                     "Causal Intelligence", "Constraints", "Recommendation",
-                    "Dynamic Rebalancing", "Scenarios", "Engine View"])
+                    "Dynamic Rebalancing", "Scenarios", "Engine View", "Closing"])
 
     # ── TAB 0: Demo Scope ──
     with tabs[0]:
@@ -88,6 +88,10 @@ def main():
     # ── TAB 10: Engine View ──
     with tabs[10]:
         _tab_engine_view(settings)
+
+    # ── TAB 11: Closing ──
+    with tabs[11]:
+        _tab_closing()
 
 
 # ────────────────────────────────────────────────────────────────
@@ -721,7 +725,8 @@ def _tab_constraints(settings):
 - Keep full audit trail
 """)
 
-    _tab_summary("Constraints define what is allowed. The engine finds the best allocation within these boundaries.")
+    if "constraint_settings" in st.session_state:
+        _tab_summary("Constraints define what is allowed. The engine finds the best allocation within these boundaries.")
 
 
 def _generate_weather_forecast(planning_weeks: int, seed: int) -> dict:
@@ -906,6 +911,9 @@ def _tab_recommendation(settings):
                 else:
                     st.write("- All Climb ASPs certified ✓")
 
+    if st.session_state.get("show_rec_kpi"):
+        _tab_summary("Not just a ranking. A concrete, feasible allocation with clear reasoning.")
+
 
 def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
     """Run the 36-month simulation deterministically. Returns cached dict."""
@@ -941,8 +949,8 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
                "climb": ["TowerPro", "VerticalWorks", "Climb ASP 4", "Climb ASP 5"]}
     monthly_scores = []
     monthly_allocs = []
-    prev_alloc = {p: dict(a) for p, a in start_alloc.items()}    # First ASP per profile (the one that gets capped/removed)
-    asp_first = {"urban": "CityConnect", "mountain": "AlpineReach", "climb": "SkyClimb"}
+    prev_alloc = {p: dict(a) for p, a in start_alloc.items()}    # ASPs capped during M6-M10
+    asp_capped = ["UrbanLink", "VerticalWorks"]
     asp_second = {"urban": "UrbanLink", "mountain": "SummitField", "climb": "TowerPro"}
 
     for month in range(1, n_months + 1):
@@ -960,7 +968,7 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
                 noise = m_rng.normal(0, 1.2)
                 drift = trends.get(asp, 0) * month * 0.2
                 event = 0
-                if 6 <= month <= 10 and asp == asp_first[profile]:
+                if 6 <= month <= 10 and asp in asp_capped:
                     event = -18
                 if 18 <= month <= 21:
                     event = -10 - m_rng.uniform(0, 5)
@@ -991,9 +999,9 @@ def _run_rebalancing_sim(scored, result, demands, seed, max_share_pct):
                 raw[asp] = prev + max(-5, min(5, raw[asp] - prev))
             if 6 <= month <= 10:
                 for asp in asps:
-                    if asp == asp_first[profile] and raw[asp] > 30:
-                        excess = raw[asp] - 30
-                        raw[asp] = 30
+                    if asp in asp_capped and raw[asp] > 25:
+                        excess = raw[asp] - 25
+                        raw[asp] = 25
                         for o in [a for a in asps if a != asp]:
                             raw[o] += excess / (len(asps) - 1)
             for asp in asps:
@@ -1143,7 +1151,7 @@ def _tab_rebalancing(settings):
 
     st.markdown("""
 **Our journey to the future:**
-- **Year 1 (M6–M10):** CityConnect/AlpineReach/SkyClimb capped at 30% due to capacity constraints
+- **Year 1 (M6–M10):** UrbanLink and VerticalWorks capped at 25% due to internal capacity constraints
 - **Year 2 (M18–M21):** Flood hits Urban & Climb — SLA and NPS collapse, significant cost increase. Mountain not affected.
 - **Year 3 (M25+):** Network rollout → First ASP exits, new ASPs start delivering
 """)
@@ -1177,7 +1185,7 @@ def _tab_rebalancing(settings):
     def _render(m):
         m_idx = m - 1
         if 6 <= m <= 10:
-            color, text = "#fff3cd", f"\u26a0\ufe0f M{m}: First ASP capacity capped at 30%"
+            color, text = "#fff3cd", f"\u26a0\ufe0f M{m}: UrbanLink & VerticalWorks capped at 25%"
         elif 18 <= m <= 21:
             color, text = "#cce5ff", f"\U0001f30a M{m}: Flood \u2014 Urban & Climb hit (SLA/NPS collapse, cost +15\u20ac). Mountain OK."
         elif m >= 25:
@@ -1529,13 +1537,15 @@ def _tab_scenarios(settings):
         if abs(k["Avg Cost/Task"] - base_kpis["Avg Cost/Task"]) > 10:
             kpi_penalty += 5
     resilience = max(15, min(85, int(feasible_count * 25 + 30 - kpi_penalty)))
-    # Scenario-specific resilience ranges
+    # Scenario-specific resilience ranges (seeded for consistency)
+    import numpy as np
+    res_rng = np.random.default_rng(hash(selected) % 10000)
     if selected == "budget":
-        resilience = max(60, min(80, resilience))
+        resilience = int(res_rng.integers(65, 78))
     elif selected == "demand":
-        resilience = max(80, min(90, resilience))
+        resilience = int(res_rng.integers(80, 90))
     elif selected == "5g":
-        resilience = max(85, min(95, resilience))
+        resilience = int(res_rng.integers(88, 96))
     res_color = "#00CC96" if resilience >= 65 else "#FFA500" if resilience >= 40 else "#EF553B"
 
     st.markdown(f"""
@@ -1606,7 +1616,7 @@ def _scenario_bar(pct: dict, title: str):
     fig = go.Figure()
     colors_list = ["#90EE90", "#636EFA", "#EF553B", "#FFA500", "#9467BD"]
     for profile in reversed(["urban", "mountain", "climb"]):
-        asps = list(pct.get(profile, {}).keys())
+        asps = [a for a in pct.get(profile, {}).keys() if pct[profile][a] > 1]
         for idx, asp in enumerate(asps):
             p = pct[profile][asp]
             fig.add_trace(go.Bar(name=asp, x=[p], y=[profile.title()], orientation="h",
@@ -1688,7 +1698,20 @@ def _tab_engine_view(settings):
 """, unsafe_allow_html=True)
 
     st.divider()
-    _tab_summary("Today we often report what happened. With prescriptive analytics, we recommend what to do next. On a continual basis.")
+    _tab_summary("This demo applies simplified methods to illustrate capabilities. In production, each capability requires robust, scalable methods from a broad portfolio — calibrated to data volume, decision frequency, and business criticality.")
+
+
+def _tab_closing():
+    st.markdown("")
+    st.markdown("")
+    st.markdown("""<div style="text-align:center;padding:60px 40px">
+<span style="color:#FF8C00;font-style:italic;font-size:1.6rem;line-height:2.2">
+"Today we report what happened.<br>
+Tomorrow we recommend what to do next.<br>
+Prescriptive analytics turns data into decisions —<br>
+adaptive, explainable, and continuous."
+</span>
+</div>""", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
