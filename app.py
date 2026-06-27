@@ -24,8 +24,8 @@ def load_settings() -> dict:
 
 
 def main():
-    st.title("Dynamic ASP Allocation Optimizer")
-    st.caption("Telco Field Services — Prescriptive Analytics Demo")
+    st.title("Dynamic Allocation Optimizer")
+    st.caption("Prescriptive Analytics Demo")
 
     settings = load_settings()
 
@@ -100,8 +100,16 @@ to multiple ASPs (Alternate Service Providers). Today, task volume is split **eq
 of performance, cost, safety or capacity. This is inefficient and risky.
 """)
 
+    st.info('> *"How should we split field-service task volume across ASPs, considering cost, safety, SLA, NPS, repeat visits, capacity, weather, certifications, budget, data quality, and SME knowledge?"*')
+
+    st.subheader("Three Service Profiles")
+    c1, c2, c3 = st.columns(3)
+    c1.success("**🏙️ Urban**\nStandard city tasks\n\n*Challenge: Volume, cost, SLA*")
+    c2.warning("**⛰️ Mountain**\nDifficult travel tasks\n\n*Challenge: Weather, access, delays*")
+    c3.error("**🧗 Climb**\nRisky climbing work\n\n*Challenge: Safety, certifications*")
+
     st.subheader("Baseline Environment")
-    st.markdown("**9 ASPs across 3 service profiles:**")
+    st.markdown("**9 ASPs across 3 profiles — today each gets 33% (equal split):**")
 
     import plotly.graph_objects as go
     # Equal split baseline visualization
@@ -141,10 +149,10 @@ of performance, cost, safety or capacity. This is inefficient and risky.
 
 
 def _tab_specification():
-    st.header("🎯 Dynamic ASP Allocation Optimizer")
-    st.subheader("Prescriptive Analytics Demo for Telco Field Services")
+    st.header("🎯 Prescriptive Analytics Demo")
+    st.subheader("Dynamic Allocation Optimizer")
 
-    st.info('> **"How should we split field-service task volume across ASPs, considering cost, safety, SLA, NPS, repeat visits, capacity, weather, certifications, budget, data quality, and SME knowledge?"**')
+    st.info('> **Generic decision problem:** Given uncertain demand, multiple execution options, imperfect historical performance data, and competing business objectives — decide how to allocate work across available resources in a way that maximizes risk-adjusted business value.')
 
     col1, col2 = st.columns(2)
     with col1:
@@ -157,36 +165,34 @@ def _tab_specification():
     with col2:
         st.markdown("#### 🔄 Today vs. Tomorrow")
         st.markdown("""
-| Today | With This Demo |
-|-------|---------------|
-| Static rules | Dynamic optimization |
-| Manual judgement | Data + SME driven |
-| Limited dashboards | Prescriptive recommendations |
+| Today | With Prescriptive Analytics |
+|-------|---------------------------|
+| Static rules & equal splits | Dynamic optimization |
+| Manual judgement | Data + SME + causal driven |
+| Reporting what happened | Recommending what to do next |
+| One-time decisions | Adaptive rebalancing |
 """)
 
     st.divider()
 
-    st.markdown("#### 🏗️ Three Service Profiles")
-    c1, c2, c3 = st.columns(3)
-    c1.success("**🏙️ Urban**\nStandard city tasks\n\n*Challenge: Volume, cost, SLA*")
-    c2.warning("**⛰️ Mountain**\nDifficult travel tasks\n\n*Challenge: Weather, access, delays*")
-    c3.error("**🧗 Climb**\nRisky climbing work\n\n*Challenge: Safety, certifications*")
-    st.caption("Each profile has 3 ASPs competing for task volume.")
-
-    st.divider()
-
-    st.markdown("#### 🧠 Five Prescriptive Capabilities")
+    st.markdown("#### 🧠 Decision Intelligence Process Flow")
     capabilities = [
-        ("1️⃣", "Business Scorecard", "Compare ASPs across all KPIs", "#d4edda"),
-        ("2️⃣", "Data Confidence Layer", "Make decisions despite imperfect data", "#cce5ff"),
-        ("3️⃣", "Causal Intelligence Layer", "Understand why raw KPIs can mislead", "#fff3cd"),
-        ("4️⃣", "Allocation Engine", "Get a feasible task-volume split", "#e2d9f3"),
-        ("5️⃣", "Management Simulator", "Test scenarios & rebalance over time", "#f8d7da"),
+        ("📊", "Decision Value Model", "Score options against business objectives", "#d4edda"),
+        ("🧹", "Uncertainty & Data Reliability", "Make decisions despite imperfect data", "#cce5ff"),
+        ("🧠", "Causal / Driver Intelligence", "Understand why, not just what", "#fff3cd"),
+        ("🎯", "Prescriptive Optimization", "Find the best feasible allocation", "#e2d9f3"),
+        ("⏱️", "Adaptive Rebalancing", "Adjust decisions as reality changes", "#f8d7da"),
+        ("🧪", "Scenario & Risk Simulation", "Test resilience before committing", "#e8f8f5"),
+        ("💬", "Decision Explanation", "Justify every recommendation", "#fef9e7"),
+        ("🛡️", "Governance & Decision Rights", "Control autonomy vs. human approval", "#f2f3f4"),
+        ("🔁", "Outcome Learning", "Learn from predicted vs. actual", "#fae5d3"),
     ]
-    cols = st.columns(5)
-    for col, (icon, name, desc, color) in zip(cols, capabilities):
-        col.markdown(f"""<div style="background:{color};padding:12px;border-radius:8px;text-align:center;height:160px;color:black">
-<b>{icon}<br>{name}</b><br><small>{desc}</small></div>""", unsafe_allow_html=True)
+    # Display in 3 rows of 3
+    for row_start in range(0, 9, 3):
+        cols = st.columns(3)
+        for col, (icon, name, desc, color) in zip(cols, capabilities[row_start:row_start + 3]):
+            col.markdown(f"""<div style="background:{color};padding:12px;border-radius:8px;text-align:center;height:120px;color:black">
+<span style="font-size:1.5rem">{icon}</span><br><b>{name}</b><br><small>{desc}</small></div>""", unsafe_allow_html=True)
 
     st.divider()
 
