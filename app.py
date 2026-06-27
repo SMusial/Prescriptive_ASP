@@ -202,8 +202,8 @@ Anybody interested in applying contemporary analytics capabilities — regardles
             ("⏱️", "Adaptive Rebalancing", "Adjust decisions as reality changes", "#f8d7da"),
             ("🧪", "Scenario & Risk Simulation", "Test resilience before committing", "#e8f8f5"),
             ("💬", "Decision Explanation", "Justify every recommendation", "#fef9e7"),
-            ("🛡️", "Governance & Decision Rights", "e.g. auto-approve if saving <5%, require human sign-off above", "#f2f3f4"),
-            ("🔁", "Outcome Learning", "e.g. predicted ASP would deliver 92% SLA — actual was 85% → adjust score", "#fae5d3"),
+            ("🛡️", "Governance & Decision Rights", "Control autonomy vs. human approval", "#f2f3f4"),
+            ("🔁", "Outcome Learning", "Learn from predicted vs. actual", "#fae5d3"),
         ]
         for row_start in range(0, 9, 3):
             cols = st.columns(3, gap="medium")
@@ -865,7 +865,7 @@ def _tab_recommendation(settings):
         rec_profile_kpis = _compute_weighted_kpis(scored, {profile_key: profile_alloc}, {profile_key: profile_demand})
         eq_profile_kpis = _compute_weighted_kpis(scored, {profile_key: equal_profile}, {profile_key: profile_demand})
         kpi_cols = st.columns(4)
-        for col, label in zip(kpi_cols, kpi_labels):
+        for col, label in zip(kpi_cols, ["Avg Cost/Task", "SLA %", "NPS", "Repeat %"]):
             rec_val = rec_profile_kpis[label]
             delta = rec_val - eq_profile_kpis[label]
             dc = "inverse" if label in ["Avg Cost/Task", "Repeat %"] else "normal"
