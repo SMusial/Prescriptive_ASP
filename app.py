@@ -185,7 +185,7 @@ Anybody interested in applying contemporary analytics capabilities — regardles
             st.markdown("""
 | Today | With Prescriptive Analytics |
 |-------|---------------------------|
-| Static rules & equal splits | Dynamic optimization |
+| Static rules | Dynamic optimization |
 | Manual judgement | Data + SME + causal driven |
 | Reporting what happened | Recommending what to do next |
 | One-time decisions | Adaptive rebalancing |
@@ -202,8 +202,8 @@ Anybody interested in applying contemporary analytics capabilities — regardles
             ("⏱️", "Adaptive Rebalancing", "Adjust decisions as reality changes", "#f8d7da"),
             ("🧪", "Scenario & Risk Simulation", "Test resilience before committing", "#e8f8f5"),
             ("💬", "Decision Explanation", "Justify every recommendation", "#fef9e7"),
-            ("🛡️", "Governance & Decision Rights", "Control autonomy vs. human approval", "#f2f3f4"),
-            ("🔁", "Outcome Learning", "Learn from predicted vs. actual", "#fae5d3"),
+            ("🛡️", "Governance & Decision Rights", "e.g. auto-approve if saving <5%, require human sign-off above", "#f2f3f4"),
+            ("🔁", "Outcome Learning", "e.g. predicted ASP would deliver 92% SLA — actual was 85% → adjust score", "#fae5d3"),
         ]
         for row_start in range(0, 9, 3):
             cols = st.columns(3, gap="medium")
@@ -295,7 +295,7 @@ def _tab_setup(settings):
             wf = generate_workforce(int(seed))
             st.session_state["workforce"] = wf
             # Clear downstream state
-            for k in ["metrics", "scored", "result", "constraint_settings"]:
+            for k in ["metrics", "scored", "result", "constraint_settings", "causal_applied", "show_scores", "show_dq", "show_rec_split", "show_rec_kpi", "show_rebal", "causal_step"]:
                 st.session_state.pop(k, None)
     with col_btn2:
         if st.button("Reset Demo"):
@@ -517,8 +517,8 @@ def _tab_causal():
     observations = get_active_observations()
     ctx_final = apply_sme_adjustment(ctx_scored, observations)
 
-    # Update scored
-    if "scored" in st.session_state:
+    # Update scored ONCE (not on every rerun)
+    if "scored" in st.session_state and not st.session_state.get("causal_applied"):
         scored_updated = st.session_state["scored"].copy()
         for _, row in ctx_final.iterrows():
             mask = scored_updated["asp"] == row["asp"]
@@ -526,6 +526,7 @@ def _tab_causal():
             current = scored_updated.loc[mask, "business_score"].values[0]
             scored_updated.loc[mask, "business_score"] = max(0, min(100, current + total_adjustment))
         st.session_state["scored"] = scored_updated
+        st.session_state["causal_applied"] = True
 
     import plotly.graph_objects as go
 
@@ -819,21 +820,21 @@ def _tab_recommendation(settings):
 
     if st.session_state.get("show_rec_kpi"):
         st.subheader("Expected KPI Impact (vs equal 1/3 split)")
-    kpi_labels = ["Avg Cost/Task", "SLA %", "NPS", "Repeat %"]
-    equal_alloc_all = {}
-    for profile in ["urban", "mountain", "climb"]:
-        profile_asps = list(result["allocations"][profile].keys())
-        d = demands.get(profile, 0)
-        equal_alloc_all[profile] = {asp: d // len(profile_asps) for asp in profile_asps}
-    rec_kpis = _compute_weighted_kpis(scored, result["allocations"], demands)
-    eq_kpis = _compute_weighted_kpis(scored, equal_alloc_all, demands)
-    kpi_cols = st.columns(4)
-    for col, label in zip(kpi_cols, kpi_labels):
-        delta = rec_kpis[label] - eq_kpis[label]
-        dc = "inverse" if label in ["Avg Cost/Task", "Repeat %"] else "normal"
-        col.metric(label, f"{rec_kpis[label]:.1f}", f"{delta:+.1f} vs equal", delta_color=dc)
+        kpi_labels = ["Avg Cost/Task", "SLA %", "NPS", "Repeat %"]
+        equal_alloc_all = {}
+        for profile in ["urban", "mountain", "climb"]:
+            profile_asps = list(result["allocations"][profile].keys())
+            d = demands.get(profile, 0)
+            equal_alloc_all[profile] = {asp: d // len(profile_asps) for asp in profile_asps}
+        rec_kpis = _compute_weighted_kpis(scored, result["allocations"], demands)
+        eq_kpis = _compute_weighted_kpis(scored, equal_alloc_all, demands)
+        kpi_cols = st.columns(4)
+        for col, label in zip(kpi_cols, kpi_labels):
+            delta = rec_kpis[label] - eq_kpis[label]
+            dc = "inverse" if label in ["Avg Cost/Task", "Repeat %"] else "normal"
+            col.metric(label, f"{rec_kpis[label]:.1f}", f"{delta:+.1f} vs equal", delta_color=dc)
 
-    st.metric("Total Estimated Cost", f"€{result['total_cost']:,.0f}", f"Budget: €{budget:,}")
+        st.metric("Total Estimated Cost", f"\u20ac{result['total_cost']:,.0f}", f"Budget: \u20ac{budget:,}")
 
     # ── Profile Detail (hidden by default) ──
     st.markdown("---")
