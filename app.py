@@ -1670,8 +1670,14 @@ def _tab_engine_view(settings):
 <tr>
 <td style="padding:8px;text-align:center;font-size:2.2rem">⏱️</td>
 <td style="padding:8px"><b>Adaptive Policy / Rebalancing</b></td>
-<td style="padding:8px;color:#85c1e9">Monthly simulation, movement caps</td>
-<td style="padding:8px;color:#d2b4de">Contextual Bandits, RL, Rolling Horizon Optimization, Model Predictive Control</td>
+<td style="padding:8px;color:#85c1e9">Monthly simulation, movement caps, score-proportional reallocation</td>
+<td style="padding:8px;color:#d2b4de">Contextual Bandits, Rolling Horizon Optimization, Model Predictive Control</td>
+</tr>
+<tr>
+<td style="padding:8px;text-align:center;font-size:2.2rem">🤖</td>
+<td style="padding:8px"><b>Reinforcement Learning</b></td>
+<td style="padding:8px;color:#85c1e9">Not applied in demo (sequential decisions simplified to rules)</td>
+<td style="padding:8px;color:#d2b4de">Offline RL (safe learning from historical decisions), Thompson Sampling (explore/exploit for new ASPs), Multi-agent RL (competing ASP policies), Model-based RL (plan allocation 3–6 months ahead)</td>
 </tr>
 <tr>
 <td style="padding:8px;text-align:center;font-size:2.2rem">🧪</td>
