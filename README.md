@@ -296,7 +296,7 @@ Do not interpret the generated results as operational recommendations. A product
 
 * [Project specification](PROJECT_SPECIFICATION.md) — architecture, data model, algorithms, constraints, and technology stack.
 * [Current state](CURRENT_STATE.md) — detailed tab behavior, design decisions, ASP templates, and demo tips.
-* [Demo script](DEMO_TYPESCRIPT.md) — suggested 45-minute narrative for business and technical audiences.
+* [Demo script](DEMO.md) — suggested 45-minute narrative for business and technical audiences.
 
 ## License
 
