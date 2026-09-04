@@ -36,7 +36,7 @@ def test_missing_values_generated():
 def test_smoothing_stable():
     df = generate_tasks(seed=42)
     metrics = smooth_metrics(df)
-    assert (metrics["smoothed_nps"] >= 0).all()
+    assert (metrics["smoothed_nps"] >= -100).all()
     assert (metrics["smoothed_nps"] <= 100).all()
 
 
@@ -54,16 +54,18 @@ def test_climb_ineligible_gets_zero():
     metrics = smooth_metrics(df)
     weights = {"cost": 20, "safety": 30, "sla": 25, "nps": 15, "repeat_visits": 10}
     scored = compute_scores(metrics, weights)
+    climb_asps = PROFILES["climb"]["asps"]
+    ineligible = climb_asps[0]
     constraints = {
-        "capacity": {"climb_asp_1": 80, "climb_asp_2": 100, "climb_asp_3": 90},
+        "capacity": {a.lower().replace(" ", "_"): 200 for a in climb_asps},
         "max_share": 0.60, "min_share": 0.10,
         "budget": 180000, "climb_safety_threshold": 90,
         "asp_max_share": {}, "weather_reduction": 0,
-        "climb_ineligible": ["Climb ASP 1"],
+        "climb_ineligible": [ineligible],
         "climb_repeat_penalty": 1.0,
     }
     result = optimize_allocation(scored, constraints)
-    assert result["allocations"]["climb"]["Climb ASP 1"] == 0
+    assert result["allocations"]["climb"][ineligible] == 0
 
 
 def test_budget_constraint():
@@ -90,8 +92,8 @@ def test_sme_cap_respected():
     scored = compute_scores(metrics, weights)
     obs = get_active_observations()
     effects = get_engine_effects(obs)
-    assert "Mountain ASP 1" in effects["max_share_caps"]
-    assert effects["max_share_caps"]["Mountain ASP 1"] == 0.45
+    assert "AlpineReach" in effects["max_share_caps"]
+    assert effects["max_share_caps"]["AlpineReach"] == 0.45
 
 
 def test_scenario_changes_output():

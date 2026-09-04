@@ -894,22 +894,22 @@ def _tab_recommendation(settings):
             dc = "inverse" if label in ["Avg Cost/Task", "Repeat %"] else "normal"
             col.metric(label, f"{rec_val:.1f}", f"{delta:+.1f} vs equal", delta_color=dc)
 
-        with st.expander(f"Constraints active for {selected_profile}"):
-            st.write(f"- Max share per ASP: {int(max_share*100)}% = {int(profile_demand * max_share)} tasks")
-            st.write(f"- Planning weeks factor: {planning_weeks}/4 = {planning_weeks/4:.2f}×")
-            wr = weather_forecast.get(profile_key, 0)
-            if wr > 0:
-                st.write(f"- Weather capacity reduction: −{int(wr*100)}%")
-            sme_caps = full_constraints.get("asp_max_share", {})
-            for asp, cap in sme_caps.items():
-                if profile_key in asp.lower():
-                    st.write(f"- SME cap: {asp} ≤ {int(cap*100)}%")
-            if profile_key == "climb":
-                inelig = full_constraints.get("climb_ineligible", [])
-                if inelig:
-                    st.write(f"- Ineligible (certification): {', '.join(inelig)}")
-                else:
-                    st.write("- All Climb ASPs certified ✓")
+        st.markdown(f"**Active constraints for {selected_profile}**")
+        st.write(f"- Max share per ASP: {int(max_share*100)}% = {int(profile_demand * max_share)} tasks")
+        st.write(f"- Planning weeks factor: {planning_weeks}/4 = {planning_weeks/4:.2f}×")
+        wr = weather_forecast.get(profile_key, 0)
+        if wr > 0:
+            st.write(f"- Weather capacity reduction: −{int(wr*100)}%")
+        sme_caps = full_constraints.get("asp_max_share", {})
+        for asp, cap in sme_caps.items():
+            if profile_key in asp.lower():
+                st.write(f"- SME cap: {asp} ≤ {int(cap*100)}%")
+        if profile_key == "climb":
+            inelig = full_constraints.get("climb_ineligible", [])
+            if inelig:
+                st.write(f"- Ineligible (certification): {', '.join(inelig)}")
+            else:
+                st.write("- All Climb ASPs certified ✓")
 
     if st.session_state.get("show_rec_split"):
         _tab_summary("Not just a ranking. A concrete, feasible allocation with clear reasoning.")
